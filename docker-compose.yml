@@ -1,5 +1,3 @@
-
-
 services:
   mysql:
     image: mysql:8.0
@@ -11,12 +9,95 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7
     container_name: redis-container
     ports:
       - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.10
+    container_name: elasticsearch-container
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+      - cluster.name=cinema-cluster
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'status.*green\\|yellow'" ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:7.17.10
+    container_name: logstash-container
+    ports:
+      - "5000:5000" # TCP input cho logback
+      - "5044:5044" # Beats input cho Filebeat
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    environment:
+      - LS_JAVA_OPTS=-Xmx256m -Xms256m
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9600/_node/stats" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.10
+    container_name: kibana-container
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=kibana
+      - SERVER_PUBLICBASEURL=http://localhost:5601
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5601/api/status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Optional: Filebeat để đọc log files
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.17.10
+    container_name: filebeat-container
+    user: root
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./logs:/usr/share/cinema/logs:ro # Mount log folder của app
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      logstash:
+        condition: service_healthy
 
   app:
     build: .
@@ -24,25 +105,42 @@ services:
     ports:
       - "8081:8081"
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
-      SPRING_DATASOURCE_URL:  ${SPRING_DATASOURCE_URL}
+      # Database
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
       SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+      # Redis
       SPRING_REDIS_HOST: ${SPRING_REDIS_HOST}
       SPRING_REDIS_PORT: ${SPRING_REDIS_PORT}
+      # ELK Logging
+      LOGGING_LOGSTASH_HOST: logstash
+      LOGGING_LOGSTASH_PORT: 5000
+      # Cloud
       CLOUD_NAME: ${CLOUD_NAME}
       CLOUD_API_KEY: ${CLOUD_API_KEY}
       CLOUD_API_SECRET: ${CLOUD_API_SECRET}
+      # Other configs
       NGROK_URL: ${NGROK_URL}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD}
       EMAIL_USERNAME: ${EMAIL_USERNAME}
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
       TMN_CODE: ${TMN_CODE}
       TMN_KEY: ${TMN_KEY}
+    volumes:
+      - ./logs:/app/logs # Mount logs ra ngoài để Filebeat đọc
+    restart: unless-stopped
 
 volumes:
   mysql_data:
+    driver: local
+  esdata:
+    driver: local

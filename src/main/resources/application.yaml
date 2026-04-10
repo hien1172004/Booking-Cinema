@@ -21,11 +21,19 @@ server:
   port: ${APP_PORT}
 
 logging:
+  config: classpath:logback-spring.xml
   level:
+    root: INFO
+    org.springframework: INFO
     org.hibernate.SQL: debug
     org.hibernate.type.descriptor.sql.BasicBinder: trace
+    org.hibernate: ERROR
 
 cloudinary:
   cloud-name: ${CLOUD_NAME}
   api-key: ${CLOUD_API_KEY}
   api-secret: ${CLOUD_API_SECRET}
+
+
+
+#

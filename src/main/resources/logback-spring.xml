@@ -1,0 +1,51 @@
+<configuration>
+
+    <!-- Đọc host/port từ Spring environment (có thể override qua application.yml) -->
+    <springProperty scope="context" name="LOGSTASH_HOST" source="logging.logstash.host" defaultValue="localhost"/>
+    <springProperty scope="context" name="LOGSTASH_PORT" source="logging.logstash.port" defaultValue="5000"/>
+
+    <!-- CONSOLE LOG -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- FILE APPENDER (backup khi Logstash down + để Filebeat đọc) -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>/app/logs/cinema.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>/app/logs/cinema.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>7</maxHistory>
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- LOGSTASH APPENDER (chỉ chạy trong Docker, không chạy khi local) -->
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST}:${LOGSTASH_PORT}</destination>
+
+        <!-- JSON format gửi tới Logstash -->
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"cinema-booking"}</customFields>
+        </encoder>
+
+        <!-- Tự reconnect nếu Logstash tạm thời down -->
+        <reconnectionDelay>5000</reconnectionDelay>
+
+    </appender>
+
+    <!-- ROOT LOG LEVEL -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+        <!-- Logstash appender chỉ active khi profile KHÔNG phải "local" -->
+        <springProfile name="!local">
+            <appender-ref ref="LOGSTASH"/>
+        </springProfile>
+    </root>
+
+</configuration>

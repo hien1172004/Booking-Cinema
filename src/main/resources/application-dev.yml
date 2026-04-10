@@ -75,3 +75,7 @@ springdoc:
     try-it-out-enabled: true
     persistAuthorization: true
     filter: true
+logging:
+  logstash:
+    host: ${LOGGING_LOGSTASH_HOST:logstash}
+    port: ${LOGGING_LOGSTASH_PORT:5000}

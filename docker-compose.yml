@@ -135,6 +135,12 @@ services:
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
       TMN_CODE: ${TMN_CODE}
       TMN_KEY: ${TMN_KEY}
+      # AI (Gemini via OpenAI-compatible API)
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_OPENAI_BASE_URL: ${GEMINI_OPENAI_BASE_URL}
+      GEMINI_MODEL: ${GEMINI_MODEL}
+      APP_AI_ENABLED: ${APP_AI_ENABLED}
+      CHAT_MEMORY_TTL: ${CHAT_MEMORY_TTL}
     volumes:
       - ./logs:/app/logs # Mount logs ra ngoài để Filebeat đọc
     restart: unless-stopped

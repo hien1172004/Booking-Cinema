@@ -25,15 +25,11 @@ import java.util.Map;
 @EnableCaching
 public class RedisConfig {
 
-    /**
-     * Bean ObjectMapper dùng riêng cho Redis.
-     * Đặt tên "redisObjectMapper" để tránh xung đột với ObjectMapper mặc định của Spring Boot.
-     */
-    @Bean
-    public ObjectMapper redisObjectMapper() {
+        static ObjectMapper createRedisObjectMapper() {
         // Whitelist các package được phép deserialize — tránh deserialization attack
         PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfSubType("org.example.cinemaBooking")
+                .allowIfSubType("org.springframework.ai")
                 .allowIfSubType("java.util")
                 .allowIfSubType("java.time")
                 .build();
@@ -51,8 +47,8 @@ public class RedisConfig {
      * RedisTemplate dùng cho các thao tác thủ công với Redis (opsForValue, opsForHash, ...).
      */
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory,
-                                                       ObjectMapper redisObjectMapper) {
+        public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+                ObjectMapper redisObjectMapper = createRedisObjectMapper();
         GenericJackson2JsonRedisSerializer serializer =
                 new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 
@@ -70,8 +66,8 @@ public class RedisConfig {
      * CacheManager dùng cho @Cacheable, @CachePut, @CacheEvict.
      */
     @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory,
-                                          ObjectMapper redisObjectMapper) {
+        public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+                ObjectMapper redisObjectMapper = createRedisObjectMapper();
         GenericJackson2JsonRedisSerializer serializer =
                 new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 

@@ -9,12 +9,27 @@ spring:
       minimum-idle: 5
   cache:
     type: redis
+  ai:
+    retry:
+      exclude-on-http-codes: 429
+    openai:
+      api-key: ${GEMINI_API_KEY:}
+      base-url: ${GEMINI_OPENAI_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai}
+      chat:
+        enabled: ${APP_AI_ENABLED:false}
+        options:
+          model: ${GEMINI_MODEL:gemini-2.0-flash}
+          temperature: 0.7
+      embedding:
+        enabled: false
 
   data:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       timeout: 2000
+      repositories:
+        enabled: false
 
   jpa:
     hibernate:
@@ -49,6 +64,10 @@ server:
 
 app:
   frontend-url: http://localhost:3000
+  ai:
+    enabled: ${APP_AI_ENABLED:false}
+  chat-memory:
+    ttl: ${CHAT_MEMORY_TTL:PT24H}
 
 vnpay:
   tmn-code: ${TMN_CODE}

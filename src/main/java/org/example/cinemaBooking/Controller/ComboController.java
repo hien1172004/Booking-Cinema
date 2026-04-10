@@ -103,6 +103,7 @@ public class ComboController {
 
     @Operation(summary = "lấy tất cả combo cho ADMIN",
             description = "lấy tất cả combo, có phân trang và sắp xếp, hỗ trợ tìm kiếm theo tên. Yêu cầu ADMIN")
+    @SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ApiResponse<PageResponse<ComboResponse>> getCombos(
@@ -123,6 +124,7 @@ public class ComboController {
 
     @Operation(summary = "chuyển trạng thái hoạt động của combo",
             description = "chuyển trạng thái hoạt động của combo (active/inactive) theo ID. Yêu cầu ADMIN")
+    @SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{comboId}/toggle-active")
     public ApiResponse<Void> toggleActive(@PathVariable String comboId) {

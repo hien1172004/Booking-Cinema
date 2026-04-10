@@ -6,6 +6,8 @@ target/
 
 ### else ###
 .env
+/logs/
+*.log
 
 
 ### STS ###

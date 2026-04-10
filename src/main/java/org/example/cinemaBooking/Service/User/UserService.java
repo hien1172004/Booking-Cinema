@@ -1,6 +1,5 @@
 package org.example.cinemaBooking.Service.User;
 
-
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
@@ -9,17 +8,14 @@ import org.example.cinemaBooking.Entity.UserEntity;
 import org.example.cinemaBooking.Exception.AppException;
 import org.example.cinemaBooking.Exception.ErrorCode;
 import org.example.cinemaBooking.Mapper.UserMapper;
-import org.example.cinemaBooking.DTO.Request.User.ChangeAvatarRequest;
-import org.example.cinemaBooking.DTO.Request.User.ChangePasswordRequest;
-import org.example.cinemaBooking.DTO.Request.User.CreateUserRequest;
-import org.example.cinemaBooking.DTO.Request.User.UpdateProfileRequest;
+import org.example.cinemaBooking.DTO.Request.User.*;
 import org.example.cinemaBooking.DTO.Response.User.UserResponse;
 import org.example.cinemaBooking.Repository.RoleRepository;
 import org.example.cinemaBooking.Repository.UserRepository;
 import org.example.cinemaBooking.Shared.response.PageResponse;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.*;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,77 +27,90 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@FieldDefaults(
-        level = lombok.AccessLevel.PRIVATE,
-        makeFinal = true
-)
+@FieldDefaults(level = lombok.AccessLevel.PRIVATE, makeFinal = true)
 public class UserService {
+
     UserRepository userRepository;
     UserMapper userMapper;
     PasswordEncoder passwordEncoder;
     RoleRepository roleRepository;
 
-    public UserResponse getMyInfo(){
-        var userName = SecurityContextHolder
-                .getContext()
-                .getAuthentication()
-                .getName();
+    /**
+     * Lấy thông tin user hiện tại (từ SecurityContext).
+     * Cache theo username để giảm query DB.
+     */
+    @Cacheable(value = "myInfo", key = "#root.target.getCurrentUsername()")
+    public UserResponse getMyInfo() {
+
+        String userName = getCurrentUsername();
 
         UserEntity user = userRepository
                 .findUserEntityByUsername(userName)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        log.info("[USER SERVICE] Get user info for user: {}", userName);
+
+        log.info("[USER SERVICE] Get my info: {}", userName);
         return userMapper.toUserResponse(user);
     }
 
-    public UserResponse updateMyInfo(UpdateProfileRequest request){
-        var userName = SecurityContextHolder
-                .getContext()
-                .getAuthentication()
-                .getName();
+    /**
+     * Cập nhật thông tin user hiện tại.
+     * Evict cache myInfo để đảm bảo dữ liệu mới.
+     */
+    @CacheEvict(value = "myInfo", key = "#root.target.getCurrentUsername()")
+    public UserResponse updateMyInfo(UpdateProfileRequest request) {
+
+        String userName = getCurrentUsername();
 
         UserEntity user = userRepository
                 .findUserEntityByUsername(userName)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if(request.getEmail() != null &&
-                userRepository.existsByEmail(request.getEmail()) && !user.getEmail().equals(request.getEmail())){
+        if (request.getEmail() != null &&
+                userRepository.existsByEmail(request.getEmail()) &&
+                !user.getEmail().equals(request.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_EXISTED);
         }
-        userMapper.updateUser(request, user);
 
+        userMapper.updateUser(request, user);
         userRepository.save(user);
-        log.info("[USER SERVICE] Update user info for user: {}", userName);
+
+        log.info("[USER SERVICE] Update my info: {}", userName);
         return userMapper.toUserResponse(user);
     }
 
-    public  void changePassword(ChangePasswordRequest request){
-        var userName = SecurityContextHolder
-                .getContext()
-                .getAuthentication()
-                .getName();
+    /**
+     * Đổi mật khẩu user hiện tại.
+     */
+    public void changePassword(ChangePasswordRequest request) {
+
+        String userName = getCurrentUsername();
 
         UserEntity user = userRepository
                 .findUserEntityByUsername(userName)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if(!passwordEncoder.matches(request.getOldPassword(), user.getPassword())){
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             throw new AppException(ErrorCode.PASSWORD_SAME_AS_OLD);
         }
-        if(!request.getNewPassword().equals(request.getConfirmPassword())){
+
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new AppException(ErrorCode.PASSWORD_CONFIRM_NOT_MATCH);
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        log.info("[USER SERVICE] Change password for user: {}", userName);
+
+        log.info("[USER SERVICE] Change password: {}", userName);
     }
 
-    public UserResponse changeAvatar(ChangeAvatarRequest request){
-        var userName = SecurityContextHolder
-                .getContext()
-                .getAuthentication()
-                .getName();
+    /**
+     * Cập nhật avatar user hiện tại.
+     * Evict cache myInfo.
+     */
+    @CacheEvict(value = "myInfo", key = "#root.target.getCurrentUsername()")
+    public UserResponse changeAvatar(ChangeAvatarRequest request) {
+
+        String userName = getCurrentUsername();
 
         UserEntity user = userRepository
                 .findUserEntityByUsername(userName)
@@ -109,60 +118,84 @@ public class UserService {
 
         user.setAvatarUrl(request.getAvatarUrl());
         userRepository.save(user);
-        log.info("[USER SERVICE] Change avatar for user: {}", userName);
+
+        log.info("[USER SERVICE] Change avatar: {}", userName);
         return userMapper.toUserResponse(user);
     }
 
+    /**
+     * Khóa user (admin).
+     * Xóa cache user liên quan.
+     */
+    @CacheEvict(value = {"userById", "userByUsername"}, allEntries = true)
     public void lockUser(String userId) {
-        UserEntity user = userRepository
-                .findById(userId)
+
+        UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
         user.setStatus(false);
         userRepository.save(user);
-        log.info("[USER SERVICE] Lock user: {}", user.getId());
 
+        log.info("[USER SERVICE] Lock user: {}", user.getId());
     }
 
+    /**
+     * Mở khóa user (admin).
+     */
+    @CacheEvict(value = {"userById", "userByUsername"}, allEntries = true)
     public void unlockUser(String userId) {
-        UserEntity user = userRepository
-                .findById(userId)
+
+        UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
         user.setStatus(true);
         userRepository.save(user);
+
         log.info("[USER SERVICE] Unlock user: {}", user.getId());
-
     }
 
+    /**
+     * Lấy user theo ID.
+     * Cache giúp giảm query DB.
+     */
+    @Cacheable(value = "userById", key = "#userId")
     public UserResponse getUserById(String userId) {
-        UserEntity user = userRepository
-                .findById(userId)
+
+        UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        log.info("[USER SERVICE] Get user info for user: {}", user.getUsername());
+
         return userMapper.toUserResponse(user);
     }
 
+    /**
+     * Lấy user theo username.
+     */
+    @Cacheable(value = "userByUsername", key = "#username")
     public UserResponse getUserByUsername(String username) {
-        UserEntity user = userRepository
-                .findUserEntityByUsername(username)
+
+        UserEntity user = userRepository.findUserEntityByUsername(username)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        log.info("[USER SERVICE] Get user info for user: {}", username);
+
         return userMapper.toUserResponse(user);
     }
 
-    public PageResponse<UserResponse> getALlUser(int page, int size, String key) {
-        int pageNumber = 0;
-        if(page > 0){
-            pageNumber = page - 1;
-        }
-        Pageable pageable = PageRequest.of(pageNumber, size);
-        Page<UserEntity> userPage  = userRepository.searchUsers(key, pageable);
+    /**
+     * Lấy danh sách user có phân trang + search.
+     * KHÔNG CACHE vì dữ liệu thay đổi liên tục.
+     */
+    public PageResponse<UserResponse> getAllUser(int page, int size, String key) {
 
-        List<UserResponse> userResponses = userPage.getContent().stream()
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), size);
+
+        Page<UserEntity> userPage = userRepository.searchUsers(key, pageable);
+
+        List<UserResponse> items = userPage.getContent()
+                .stream()
                 .map(userMapper::toUserResponse)
                 .toList();
-        log.info("[USER SERVICE] Get all users with key: {}, page: {}, size: {}", key, page, size);
+
         return PageResponse.<UserResponse>builder()
-                .items(userResponses)
+                .items(items)
                 .page(page)
                 .size(size)
                 .totalElements(userPage.getTotalElements())
@@ -170,19 +203,22 @@ public class UserService {
                 .build();
     }
 
-    public PageResponse<UserResponse> getALlStaff(int page, int size, String key) {
-        int pageNumber = 0;
-        if(page > 0){
-            pageNumber = page - 1;
-        }
-        Pageable pageable = PageRequest.of(pageNumber, size);
-        Page<UserEntity> userPage  = userRepository.searchStaffs(key, pageable);
-        List<UserResponse> userResponses = userPage.getContent().stream()
+    /**
+     * Lấy danh sách staff.
+     */
+    public PageResponse<UserResponse> getAllStaff(int page, int size, String key) {
+
+        Pageable pageable = PageRequest.of(Math.max(page - 1, 0), size);
+
+        Page<UserEntity> userPage = userRepository.searchStaffs(key, pageable);
+
+        List<UserResponse> items = userPage.getContent()
+                .stream()
                 .map(userMapper::toUserResponse)
                 .toList();
-        log.info("[USER SERVICE] Get all staff with key: {}, page: {}, size: {}", key, page, size);
+
         return PageResponse.<UserResponse>builder()
-                .items(userResponses)
+                .items(items)
                 .page(page)
                 .size(size)
                 .totalElements(userPage.getTotalElements())
@@ -190,18 +226,19 @@ public class UserService {
                 .build();
     }
 
-    public UserResponse createUser(CreateUserRequest request){
-
-        if(userRepository.existsByUsername(request.getUsername())){
+    /**
+     * Tạo user mới (admin).
+     */
+    public UserResponse createUser(CreateUserRequest request) {
+        if (userRepository.existsByUsername(request.getUsername())) {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
 
-        if(userRepository.existsByEmail(request.getEmail())){
+        if (userRepository.existsByEmail(request.getEmail())) {
             throw new AppException(ErrorCode.EMAIL_EXISTED);
         }
 
         UserEntity user = new UserEntity();
-
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -219,5 +256,14 @@ public class UserService {
         log.info("[USER SERVICE] Admin created user: {}", user.getUsername());
 
         return userMapper.toUserResponse(user);
+    }
+
+    /**
+     * Helper: lấy username từ SecurityContext.
+     */
+    private String getCurrentUsername() {
+        return SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getName();
     }
 }

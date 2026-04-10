@@ -49,9 +49,6 @@ public class TicketService {
     UserRepository    userRepository;
     TicketMapper      ticketMapper;
 
-    // ─────────────────────────────────────────────────────────────────
-    // READ
-    // ─────────────────────────────────────────────────────────────────
 
     /**
      * Lấy tất cả vé của một booking — chỉ owner (user) mới xem được.

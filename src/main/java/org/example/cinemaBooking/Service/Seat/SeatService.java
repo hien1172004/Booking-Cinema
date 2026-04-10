@@ -16,9 +16,11 @@ import org.example.cinemaBooking.Mapper.SeatMapper;
 import org.example.cinemaBooking.Repository.RoomRepository;
 import org.example.cinemaBooking.Repository.SeatRepository;
 import org.example.cinemaBooking.Repository.SeatTypeRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,110 +34,118 @@ public class SeatService {
     SeatTypeRepository seatTypeRepository;
     SeatMapper seatMapper;
 
+    /**
+     * Tạo một ghế đơn trong phòng.
+     *
+     * @param request thông tin ghế cần tạo
+     * @return SeatResponse ghế vừa tạo
+     */
+    @CacheEvict(value = "seatsByRoom", key = "#request.roomId")
     public SeatResponse createSeat(CreateSeatRequest request) {
-        Room room = roomRepository.findById(request.roomId())
-                .orElseThrow(() -> new RuntimeException("Room not found"));
-
+        Room room = roomRepository.findById(request.roomId()).orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
         SeatType seatType = getSeatTypeOrThrow(request.seatTypeId());
-
-        if (seatRepository.existsByRoomIdAndSeatRowAndSeatNumberAndDeletedAtIsNull(
-                room.getId(), request.seatRow(), request.seatNumber()
-        )) {
+        if (seatRepository.existsByRoomIdAndSeatRowAndSeatNumberAndDeletedAtIsNull(room.getId(), request.seatRow(), request.seatNumber())) {
             throw new AppException(ErrorCode.SEAT_ALREADY_EXISTS);
         }
-
-        Seat seat = Seat.builder()
-                .seatRow(request.seatRow())
-                .seatNumber(request.seatNumber())
-                .room(room)
-                .seatType(seatType)
-                .build();
-
+        Seat seat = Seat.builder().seatRow(request.seatRow()).seatNumber(request.seatNumber()).room(room).seatType(seatType).build();
         return seatMapper.toResponse(seatRepository.save(seat));
     }
 
+    /**
+     * Tạo hàng loạt ghế cho một phòng.
+     *
+     * @param roomId  id phòng
+     * @param request danh sách nhóm ghế (row + number + type)
+     * @return danh sách ghế đã tạo
+     */
     @Transactional
+    @CacheEvict(value = "seatsByRoom", key = "#roomId")
     public List<SeatResponse> createBulkSeats(String roomId, BulkSeatRequest request) {
-        // Kiểm tra phòng tồn tại
-        Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
-
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new AppException(ErrorCode.ROOM_NOT_FOUND));
         List<Seat> seatsToCreate = new ArrayList<>();
-
-        // Duyệt từng nhóm ghế
         for (BulkSeatRequest.SeatGroup group : request.seatGroups()) {
-            // Validate input
             if (group.rows().isEmpty() || group.numbers().isEmpty()) {
-                log.warn("Seat group has empty rows or numbers, skipping group: {}", group);
+                log.warn("Empty seat group skipped: {}", group);
                 continue;
             }
-
-            // Kiểm tra seatType tồn tại
             SeatType seatType = seatTypeRepository.findById(group.seatTypeId())
                     .orElseThrow(() -> new AppException(ErrorCode.SEAT_TYPE_NOT_FOUND));
-
-            // Tạo ghế cho từng row và number
-            group.rows().forEach(row ->
-                    group.numbers().forEach(number -> {
-                        if (seatRepository.existsByRoomIdAndSeatRowAndSeatNumberAndDeletedAtIsNull(
-                                roomId, row, number)) {
-                            log.warn("Seat {}{} already exists in room {}", row, number, roomId);
-                        } else {
-                            seatsToCreate.add(Seat.builder()
+            group.rows().forEach(row -> group.numbers().forEach(number -> {
+                if (seatRepository.existsByRoomIdAndSeatRowAndSeatNumberAndDeletedAtIsNull(roomId, row, number)) {
+                    log.warn("Seat {}{} already exists in room {}", row, number, roomId);
+                } else {
+                    seatsToCreate.add(Seat.builder()
                                     .room(room)
                                     .seatRow(row)
                                     .seatNumber(number)
                                     .seatType(seatType)
                                     .active(true)
                                     .build());
-                        }
-                    })
-            );
+                }
+            }));
         }
-
         if (seatsToCreate.isEmpty()) {
-            log.warn("No new seats to create for room {}", roomId);
+            log.warn("No seats created for room {}", roomId);
             return List.of();
         }
-
-        // Lưu tất cả ghế
-        List<Seat> savedSeats = seatRepository.saveAll(seatsToCreate);
-        log.info("Created {} seats for room {}", seatsToCreate.size(), roomId);
-
-        return savedSeats.stream()
-                .map(seatMapper::toResponse)
-                .toList();
+        List<Seat> saved = seatRepository.saveAll(seatsToCreate);
+        log.info("Created {} seats for room {}", saved.size(), roomId);
+        return saved.stream().map(seatMapper::toResponse).toList();
     }
 
-
+    /**
+     * Cập nhật thông tin ghế.
+     *
+     * @param seatId  id ghế
+     * @param request dữ liệu cập nhật
+     * @return SeatResponse sau khi update
+     */
+    @CacheEvict(value = "seatsByRoom", allEntries = true)
     public SeatResponse updateSeat(String seatId, UpdateSeatRequest request) {
         Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new RuntimeException("Seat not found"));
-
+                .orElseThrow(() -> new AppException(ErrorCode.SEAT_NOT_FOUND));
         if (request.seatTypeId() != null) {
             SeatType seatType = getSeatTypeOrThrow(request.seatTypeId());
             seat.setSeatType(seatType);
         }
-
         seatMapper.updateSeat(seat, request);
-
         return seatMapper.toResponse(seatRepository.save(seat));
     }
 
+    /**
+     * Xóa mềm ghế (soft delete).
+     *
+     * @param seatId id ghế
+     */
+    @CacheEvict(value = "seatsByRoom", allEntries = true)
     public void deleteSeat(String seatId) {
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() -> new AppException(ErrorCode.SEAT_NOT_FOUND));
-
-        seat.setDeletedAt(java.time.LocalDateTime.now());
+        seat.setDeletedAt(LocalDateTime.now());
         seatRepository.save(seat);
     }
 
+    /**
+     * Lấy thông tin ghế theo id.
+     *
+     * @param seatId id ghế
+     * @return SeatResponse
+     */
     public SeatResponse getSeat(String seatId) {
         return seatRepository.findById(seatId)
                 .map(seatMapper::toResponse)
                 .orElseThrow(() -> new AppException(ErrorCode.SEAT_NOT_FOUND));
     }
 
+    /**
+     * Lấy danh sách ghế theo phòng (CACHE).
+     * <p>
+     * Cache key = roomId
+     *
+     * @param roomId id phòng
+     * @return danh sách ghế
+     */
+    @Cacheable(value = "seatsByRoom", key = "#roomId")
     public List<SeatResponse> getSeatsByRoom(String roomId) {
         return seatRepository.findAllByRoomIdFetch(roomId)
                 .stream()
@@ -143,11 +153,11 @@ public class SeatService {
                 .toList();
     }
 
-    //internal
+    /**
+     * Helper: lấy SeatType hoặc throw exception.
+     */
     private SeatType getSeatTypeOrThrow(String seatTypeId) {
         return seatTypeRepository.findById(seatTypeId)
                 .orElseThrow(() -> new AppException(ErrorCode.SEAT_TYPE_NOT_FOUND));
     }
-
-
 }

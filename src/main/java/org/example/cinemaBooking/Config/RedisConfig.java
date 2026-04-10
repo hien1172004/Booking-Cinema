@@ -3,7 +3,8 @@ package org.example.cinemaBooking.Config;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -24,20 +25,36 @@ import java.util.Map;
 @EnableCaching
 public class RedisConfig {
 
-    private ObjectMapper createObjectMapper() {
+    /**
+     * Bean ObjectMapper dùng riêng cho Redis.
+     * Đặt tên "redisObjectMapper" để tránh xung đột với ObjectMapper mặc định của Spring Boot.
+     */
+    @Bean
+    public ObjectMapper redisObjectMapper() {
+        // Whitelist các package được phép deserialize — tránh deserialization attack
+        PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                .allowIfSubType("org.example.cinemaBooking")
+                .allowIfSubType("java.util")
+                .allowIfSubType("java.time")
+                .build();
+
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        mapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance,
+        mapper.activateDefaultTyping(ptv,
                 ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfo.As.PROPERTY);
         return mapper;
     }
 
+    /**
+     * RedisTemplate dùng cho các thao tác thủ công với Redis (opsForValue, opsForHash, ...).
+     */
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
-        ObjectMapper mapper = createObjectMapper();
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(mapper);
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory,
+                                                       ObjectMapper redisObjectMapper) {
+        GenericJackson2JsonRedisSerializer serializer =
+                new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(factory);
@@ -45,39 +62,52 @@ public class RedisConfig {
         template.setValueSerializer(serializer);
         template.setHashKeySerializer(new StringRedisSerializer());
         template.setHashValueSerializer(serializer);
+        template.afterPropertiesSet();
         return template;
     }
 
+    /**
+     * CacheManager dùng cho @Cacheable, @CachePut, @CacheEvict.
+     */
     @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        ObjectMapper mapper = createObjectMapper();
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(mapper);
+    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory,
+                                          ObjectMapper redisObjectMapper) {
+        GenericJackson2JsonRedisSerializer serializer =
+                new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 
-        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofHours(1)) // Mặc định cache tồn tại 1 giờ
-                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer))
-                .disableCachingNullValues();
+        // Cấu hình mặc định: TTL 1 giờ
+        RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofHours(1))
+                .serializeKeysWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair
+                        .fromSerializer(serializer));
 
-        // Thiết lập TTL riêng cho từng loại cache (Optional)
+        // Cấu hình TTL riêng cho từng loại cache
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
 
-        // Cấu hình riêng cho Thống kê (Statistics) - thời gian sống ngắn (15 phút) để quét liên tục doanh thu
-        cacheConfigurations.put("stats-summary", config.entryTtl(Duration.ofMinutes(15)));
-        cacheConfigurations.put("stats-revenue-chart", config.entryTtl(Duration.ofMinutes(15)));
-        cacheConfigurations.put("stats-ticket-chart", config.entryTtl(Duration.ofMinutes(15)));
-        cacheConfigurations.put("stats-top-movies", config.entryTtl(Duration.ofMinutes(15)));
+        // Thống kê doanh thu — làm mới thường xuyên (15 phút)
+        cacheConfigurations.put("stats-summary",
+                defaultConfig.entryTtl(Duration.ofMinutes(15)));
+        cacheConfigurations.put("stats-revenue-chart",
+                defaultConfig.entryTtl(Duration.ofMinutes(15)));
+        cacheConfigurations.put("stats-ticket-chart",
+                defaultConfig.entryTtl(Duration.ofMinutes(15)));
+        cacheConfigurations.put("stats-top-movies",
+                defaultConfig.entryTtl(Duration.ofMinutes(15)));
 
-        // Cấu hình dài hạn (24 giờ) cho các Master Data như Danh mục (Categories) tránh quét nhiều do ít đổi
-        cacheConfigurations.put("categories", config.entryTtl(Duration.ofHours(24)));
-        cacheConfigurations.put("category", config.entryTtl(Duration.ofHours(24)));
+        // Master data danh mục — ít thay đổi (24 giờ)
+        cacheConfigurations.put("categories",
+                defaultConfig.entryTtl(Duration.ofHours(24)));
+        cacheConfigurations.put("category",
+                defaultConfig.entryTtl(Duration.ofHours(24)));
 
         // Cấu hình cho ghế rạp chiếu và lịch (30 phút)
-        cacheConfigurations.put("cinema-rooms", config.entryTtl(Duration.ofMinutes(30)));
-        cacheConfigurations.put("rooms", config.entryTtl(Duration.ofMinutes(30)));
+        cacheConfigurations.put("cinema-rooms", defaultConfig.entryTtl(Duration.ofMinutes(30)));
+        cacheConfigurations.put("rooms", defaultConfig.entryTtl(Duration.ofMinutes(30)));
 
         return RedisCacheManager.builder(connectionFactory)
-                .cacheDefaults(config)
+                .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
                 .build();
     }

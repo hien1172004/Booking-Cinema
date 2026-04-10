@@ -7,11 +7,14 @@ spring:
     hikari:
       maximum-pool-size: 10
       minimum-idle: 5
+  cache:
+    type: redis
 
   data:
     redis:
-      host: ${SPRING_REDIS_HOST}
-      port: ${SPRING_REDIS_PORT}
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      timeout: 2000
 
   jpa:
     hibernate:

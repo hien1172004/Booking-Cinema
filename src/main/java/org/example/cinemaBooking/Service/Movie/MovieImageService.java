@@ -14,6 +14,8 @@ import org.example.cinemaBooking.Exception.ErrorCode;
 import org.example.cinemaBooking.Mapper.MovieImageMapper;
 import org.example.cinemaBooking.Repository.MovieImageRepository;
 import org.example.cinemaBooking.Repository.MovieRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -29,8 +31,16 @@ public class MovieImageService {
     MovieImageRepository movieImageRepository;
     MovieImageMapper movieImageMapper;
 
-
+    /**
+     * Thêm danh sách hình ảnh mới cho một bộ phim.
+     * <p>Xoá cache "movie-images" của bộ phim này để cập nhật lại danh sách hình ảnh.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @param request Danh sách URL hình ảnh cần thêm
+     * @return Danh sách tất cả hình ảnh của bộ phim sau khi thêm
+     */
     @Transactional
+    @CacheEvict(value = "movie-images", key = "#movieId")
     public List<MovieImageResponse> createMovieImage(String movieId, CreateMovieImageRequest request) {
 
         Movie movie = movieRepository.findById(movieId)
@@ -85,8 +95,15 @@ public class MovieImageService {
                 .toList();
     }
 
-
+    /**
+     * Cập nhật danh sách hình ảnh của một bộ phim (thêm ảnh mới, xoá ảnh không còn trong danh sách).
+     * <p>Xoá cache "movie-images" của bộ phim này.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @param request Danh sách URL hình ảnh mới để đồng bộ
+     */
     @Transactional
+    @CacheEvict(value = "movie-images", key = "#movieId")
     public void updateMovieImage(String movieId, UpdateMovieImageRequest request) {
 
         Movie movie = movieRepository.findById(movieId)
@@ -128,8 +145,15 @@ public class MovieImageService {
                 movieId, toAdd.size(), toDelete.size());
     }
 
-
+    /**
+     * Xoá một hình ảnh cụ thể của bộ phim.
+     * <p>Xoá cache "movie-images" của bộ phim này.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @param imageId ID của hình ảnh cần xoá
+     */
     @Transactional
+    @CacheEvict(value = "movie-images", key = "#movieId")
     public void deleteMovieImage(String movieId, String imageId) {
 
         MovieImage movieImage = movieImageRepository
@@ -142,6 +166,14 @@ public class MovieImageService {
                 movieId, imageId);
     }
 
+    /**
+     * Lấy danh sách hình ảnh của một bộ phim.
+     * <p>Kết quả được lưu vào cache "movie-images" với key là ID của bộ phim.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @return Danh sách ảnh của bộ phim
+     */
+    @Cacheable(value = "movie-images", key = "#movieId")
     public List<MovieImageResponse> getMovieImageByMovieId(String movieId) {
 
         Movie movie = movieRepository.findById(movieId)

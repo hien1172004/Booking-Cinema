@@ -19,6 +19,8 @@ import org.example.cinemaBooking.Repository.MoviePeopleRepository;
 import org.example.cinemaBooking.Repository.MovieRepository;
 import org.example.cinemaBooking.Repository.PeopleRepository;
 import org.example.cinemaBooking.Shared.enums.MovieRole;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -39,9 +41,15 @@ public class MoviePeopleService {
     // ==================== ADD PEOPLE TO MOVIE ====================
 
     /**
-     * Thêm nhiều người vào phim (BULK)
+     * Thêm nhiều người vào phim (BULK).
+     * <p>Xoá cache "movie-people" của bộ phim này để cập nhật lại danh sách nhân sự.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @param request Danh sách người và vai trò cần thêm
+     * @return List&lt;MoviePeopleResponse&gt; danh sách đầy đủ nhân sự sau khi thêm
      */
     @Transactional
+    @CacheEvict(value = "movie-people", key = "#movieId")
     public List<MoviePeopleResponse> addPeopleToMovie(String movieId, AddPeopleToMovieRequest request) {
         log.info("===== ADD PEOPLE TO MOVIE =====");
         log.info("Movie ID: {}, Request size: {}", movieId, request.people().size());
@@ -100,9 +108,15 @@ public class MoviePeopleService {
     // ==================== UPDATE PEOPLE IN MOVIE ====================
 
     /**
-     * Update role cho nhiều người trong phim (REPLACE - giống MovieImage)
+     * Update vai trò cho nhiều người trong phim (REPLACE - giống MovieImage).
+     * <p>Xoá cache "movie-people" của bộ phim này.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @param request Yêu cầu cập nhật danh sách người và vai trò
+     * @return List&lt;MoviePeopleResponse&gt; danh sách đầy đủ nhân sự sau khi cập nhật
      */
     @Transactional
+    @CacheEvict(value = "movie-people", key = "#movieId")
     public List<MoviePeopleResponse> updateMoviePeople(String movieId, UpdateMoviePeopleRequest request) {
         log.info("===== UPDATE MOVIE PEOPLE (REPLACE) =====");
         log.info("Movie ID: {}", movieId);
@@ -282,9 +296,14 @@ public class MoviePeopleService {
     // ==================== REMOVE PEOPLE FROM MOVIE ====================
 
     /**
-     * Xóa 1 người khỏi phim
+     * Xóa 1 người khỏi phim.
+     * <p>Xoá cache "movie-people" của bộ phim này.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @param peopleId ID của người cần xóa
      */
     @Transactional
+    @CacheEvict(value = "movie-people", key = "#movieId")
     public void removePeopleFromMovie(String movieId, String peopleId) {
         log.info("Removing people {} from movie: {}", peopleId, movieId);
 
@@ -298,9 +317,14 @@ public class MoviePeopleService {
     }
 
     /**
-     * Xóa nhiều người khỏi phim
+     * Xóa nhiều người khỏi phim.
+     * <p>Xoá cache "movie-people" của bộ phim này.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @param peopleIds Danh sách ID của những người cần xóa
      */
     @Transactional
+    @CacheEvict(value = "movie-people", key = "#movieId")
     public void removeMultiplePeopleFromMovie(String movieId, List<String> peopleIds) {
         log.info("Removing {} people from movie: {}", peopleIds.size(), movieId);
 
@@ -312,9 +336,13 @@ public class MoviePeopleService {
     }
 
     /**
-     * Xóa tất cả người khỏi phim
+     * Xóa tất cả người khỏi phim.
+     * <p>Xoá toàn bộ cache "movie-people" của bộ phim này.</p>
+     *
+     * @param movieId ID của bộ phim
      */
     @Transactional
+    @CacheEvict(value = "movie-people", key = "#movieId")
     public void removeAllPeopleFromMovie(String movieId) {
         log.info("Removing all people from movie: {}", movieId);
         moviePeopleRepository.deleteByMovieId(movieId);
@@ -324,8 +352,13 @@ public class MoviePeopleService {
     // ==================== GET METHODS ====================
 
     /**
-     * Lấy tất cả people trong movie
+     * Lấy tất cả nhân sự trong một bộ phim.
+     * <p>Kết quả được lưu vào cache "movie-people" với key là ID của bộ phim.</p>
+     *
+     * @param movieId ID của bộ phim
+     * @return List&lt;MovieCastResponse&gt; Danh sách nhân sự và vai trò
      */
+    @Cacheable(value = "movie-people", key = "#movieId")
     public List<MovieCastResponse> getPeopleByMovie(String movieId) {
         if (!movieRepository.existsById(movieId)) {
             throw new AppException(ErrorCode.MOVIE_NOT_FOUND);
@@ -533,3 +566,4 @@ public class MoviePeopleService {
                 .toList();
     }
 }
+

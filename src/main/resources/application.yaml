@@ -5,6 +5,12 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+  datasource:
+    hikari:
+      initialization-fail-timeout: 60000
+      connection-timeout: 30000
+      validation-timeout: 5000
+      maximum-pool-size: 10
 
   profiles:
     active: dev
@@ -20,6 +26,6 @@ logging:
     org.hibernate.type.descriptor.sql.BasicBinder: trace
 
 cloudinary:
-  cloud-name: dohgdvnuy
-  api-key: 629845858442262
-  api-secret: gB6Ld8Agabga0TuyOH1RD9_2BG0
+  cloud-name: ${CLOUD_NAME}
+  api-key: ${CLOUD_API_KEY}
+  api-secret: ${CLOUD_API_SECRET}

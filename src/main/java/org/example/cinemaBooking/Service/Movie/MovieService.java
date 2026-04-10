@@ -21,6 +21,9 @@ import org.example.cinemaBooking.Repository.spefication.MovieSpecification;
 import org.example.cinemaBooking.Shared.response.PageResponse;
 import org.example.cinemaBooking.Shared.enums.AgeRating;
 import org.example.cinemaBooking.Shared.enums.MovieStatus;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -45,8 +48,19 @@ public class MovieService {
     CategoryRepository categoryRepository;
     MovieMapper movieMapper;
 
-
-
+    /**
+     * Tạo mới một bộ phim.
+     * <p>Xóa tất cả các cache liên quan đến danh sách phim do có phim mới được thêm vào.</p>
+     *
+     * @param request Dữ liệu phim cần tạo
+     * @return MovieResponse thông tin phim vừa tạo
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "movies", allEntries = true),
+            @CacheEvict(value = "movies-coming-soon", allEntries = true),
+            @CacheEvict(value = "movies-now-showing", allEntries = true),
+            @CacheEvict(value = "movies-search", allEntries = true)
+    })
     public MovieResponse creatMovie(CreateMovieRequest request) {
 
         Optional<Movie> existingMovie = movieRepository.findBySlug(request.getSlug());
@@ -71,7 +85,22 @@ public class MovieService {
         return movieMapper.toMovieResponse(savedMovie);
     }
 
-
+    /**
+     * Cập nhật thông tin phim.
+     * <p>Xóa cache danh sách chung, chi tiết phim và các danh sách phân loại trạng thái.</p>
+     *
+     * @param id      ID phim cần cập nhật
+     * @param request Dữ liệu phim cập nhật
+     * @return MovieResponse thông tin phim sau khi cập nhật
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "movies", allEntries = true),
+            @CacheEvict(value = "movies-coming-soon", allEntries = true),
+            @CacheEvict(value = "movies-now-showing", allEntries = true),
+            @CacheEvict(value = "movies-search", allEntries = true),
+            @CacheEvict(value = "movie", key = "#id"),
+            @CacheEvict(value = "movie-slug", key = "#request.slug")
+    })
     public MovieResponse updateMovie(String id, UpdateMovieRequest request) {
         Movie movie = movieRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MOVIE_NOT_FOUND));
@@ -104,6 +133,20 @@ public class MovieService {
         return movieMapper.toMovieResponse(movie);
     }
 
+    /**
+     * Xóa bộ phim (Soft Delete).
+     * <p>Xóa các cache chứa thông tin phim và danh sách phim.</p>
+     *
+     * @param id ID của phim cần xóa
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "movies", allEntries = true),
+            @CacheEvict(value = "movies-coming-soon", allEntries = true),
+            @CacheEvict(value = "movies-now-showing", allEntries = true),
+            @CacheEvict(value = "movies-search", allEntries = true),
+            @CacheEvict(value = "movie", key = "#id"),
+            @CacheEvict(value = "movie-slug", allEntries = true)
+    })
     public void deleteMovie(String id){
         Movie movie = movieRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MOVIE_NOT_FOUND));
@@ -112,18 +155,50 @@ public class MovieService {
         log.info("[MOVIE SERVICE] Movie {} has been deleted", movie.getId());
     }
 
+    /**
+     * Lấy thông tin chi tiết phim theo ID.
+     * <p>Kết quả được lưu vào cache "movie".</p>
+     *
+     * @param id ID của phim
+     * @return MovieResponse thông tin chi tiết
+     */
+    @Cacheable(value = "movie", key = "#id")
     public MovieResponse getMovieById(String id) {
         Movie movie = movieRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new AppException(ErrorCode.MOVIE_NOT_FOUND));
         return movieMapper.toMovieResponse(movie);
     }
 
+    /**
+     * Lấy thông tin chi tiết phim theo Slug.
+     * <p>Kết quả được lưu vào cache "movie-slug" với key là slug.</p>
+     *
+     * @param slug Đường dẫn không dấu của phim
+     * @return MovieResponse thông tin chi tiết
+     */
+    @Cacheable(value = "movie-slug", key = "#slug")
     public MovieResponse getMovieBySlug(String slug) {
         Movie movie = movieRepository.findBySlugAndDeletedFalse(slug)
                 .orElseThrow(() -> new AppException(ErrorCode.MOVIE_NOT_FOUND));
         return movieMapper.toMovieResponse(movie);
     }
 
+    /**
+     * Lấy danh sách phim (kèm lọc, sắp xếp, và phân trang).
+     * <p>Được thiết lập cache với các key tổng hợp.</p>
+     *
+     * @param keyword    Từ khoá tìm kiếm
+     * @param status     Trạng thái phim
+     * @param categoryId Thể loại phim
+     * @param ageRating  Xếp hạng độ tuổi
+     * @param page       Số thứ tự trang
+     * @param size       Kích thước trang
+     * @param sortBy     Trường sắp xếp
+     * @param sortDir    Hướng sắp xếp
+     * @return PageResponse các phim thoả mãn yêu cầu
+     */
+    @Cacheable(value = "movies",
+            key = "(#keyword ?: '') + '-' + (#status != null ? #status.name() : '') + '-' + (#categoryId ?: '') + '-' + (#ageRating != null ? #ageRating.name() : '') + '-' + #page + '-' + #size + '-' + #sortBy + '-' + #sortDir")
     public PageResponse<MovieResponse> getMovies(
             String keyword,
             MovieStatus status,
@@ -158,6 +233,22 @@ public class MovieService {
                 .build();
     }
 
+    /**
+     * Cập nhật trạng thái một bộ phim (ví dụ: đang chiếu, ngừng chiếu...).
+     * <p>Đồng thời tái tạo cache tránh trình trạng người dùng thấy dữ liệu cũ.</p>
+     *
+     * @param id      ID phim
+     * @param request Yêu cầu chứa trạng thái mới
+     * @return MovieResponse thông tin sau khi nhận cập nhật
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "movies", allEntries = true),
+            @CacheEvict(value = "movies-coming-soon", allEntries = true),
+            @CacheEvict(value = "movies-now-showing", allEntries = true),
+            @CacheEvict(value = "movies-search", allEntries = true),
+            @CacheEvict(value = "movie", key = "#id"),
+            @CacheEvict(value = "movie-slug", allEntries = true)
+    })
     public MovieResponse updateMovieStatus(String id, UpdateMovieStatusRequest request) {
         MovieStatus status = MovieStatus.valueOf(request.getStatus());
         Movie movie = movieRepository.findByIdAndDeletedFalse(id)
@@ -168,6 +259,15 @@ public class MovieService {
         return movieMapper.toMovieResponse(movie);
     }
 
+    /**
+     * Lấy danh sách phim "Sắp chiếu".
+     * <p>Cache tại "movies-coming-soon" để tải dữ liệu ở trang màn hình Home nhanh chóng.</p>
+     *
+     * @param page Số trang
+     * @param size Kích thước trang
+     * @return PageResponse phim sắp chiếu
+     */
+    @Cacheable(value = "movies-coming-soon", key = "#page + '-' + #size")
     public PageResponse<MovieResponse> getMoviesIsComingSoon(int page, int size) {
         int pageNumber = 0;
         if(page > 0) {
@@ -189,6 +289,15 @@ public class MovieService {
                 .build();
     }
 
+    /**
+     * Lấy danh sách phim "Đang chiếu".
+     * <p>Cache tại "movies-now-showing" để tải dữ liệu ở trang màn hình Home siêu nhanh.</p>
+     *
+     * @param page Số trang
+     * @param size Kích thước trang
+     * @return PageResponse phim đang chiếu
+     */
+    @Cacheable(value = "movies-now-showing", key = "#page + '-' + #size")
     public PageResponse<MovieResponse> getMoviesIsNowShowing(int page, int size) {
         int pageNumber = 0;
         if(page > 0) {
@@ -210,6 +319,16 @@ public class MovieService {
                 .build();
     }
 
+    /**
+     * Tìm kiếm phim nhanh chóng theo từ khoá chung.
+     * <p>Kết quả tìm kiếm cache tại "movies-search".</p>
+     *
+     * @param page Số trang
+     * @param size Kích thước trang
+     * @param key  Từ khoá theo title, mô tả
+     * @return PageResponse danh sách tìm kiếm
+     */
+    @Cacheable(value = "movies-search", key = "#page + '-' + #size + '-' + (#key ?: '')")
     public PageResponse<MovieResponse> searchMovie(int page, int size, String key) {
         int pageNumber = 0;
         if(page > 0) {
@@ -265,6 +384,14 @@ public class MovieService {
 
     // chạy mỗi ngày lúc 00:00
     @Scheduled(cron = "0 0 0 * * ?")
+    @Caching(evict = {
+            @CacheEvict(value = "movies", allEntries = true),
+            @CacheEvict(value = "movies-coming-soon", allEntries = true),
+            @CacheEvict(value = "movies-now-showing", allEntries = true),
+            @CacheEvict(value = "movies-search", allEntries = true),
+            @CacheEvict(value = "movie", allEntries = true),
+            @CacheEvict(value = "movie-slug", allEntries = true)
+    })
     public void updateMovieStatus() {
 
         LocalDate today = LocalDate.now();

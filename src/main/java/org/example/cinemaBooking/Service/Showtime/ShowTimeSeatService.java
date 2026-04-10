@@ -16,6 +16,8 @@ import org.example.cinemaBooking.Repository.ShowtimeRepository;
 import org.example.cinemaBooking.Repository.ShowtimeSeatRepository;
 import org.example.cinemaBooking.Repository.UserRepository;
 import org.example.cinemaBooking.Shared.enums.SeatStatus;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,6 +53,14 @@ public class ShowTimeSeatService {
     // PUBLIC API
     // ────────────────────────────────────────────────────────────
 
+    /**
+     * Lấy sơ đồ ghế của một suất chiếu.
+     * <p>Được lưu vào cache "seat-map" để tránh truy vấn quá nhiều lần khi người dùng cùng lúc vào xem ghế.</p>
+     *
+     * @param showtimeId ID suất chiếu
+     * @return SeatMapResponse sơ đồ ghế phân theo hàng (A, B, C...)
+     */
+    @Cacheable(value = "seat-map", key = "#showtimeId")
     @Transactional(readOnly = true)
     public SeatMapResponse getSeatMap(String showtimeId) {
         List<ShowtimeSeat> showtimeSeats =
@@ -87,7 +97,9 @@ public class ShowTimeSeatService {
     /**
      * Lock ghế với retry khi Optimistic Lock conflict.
      * Gọi seatTxService.doLockSeats() qua injected bean → Spring proxy intercept đúng.
+     * <p>Xoá sơ đồ ghế của suất chiếu này trong cache để cập nhật trạng thái mới.</p>
      */
+    @CacheEvict(value = "seat-map", key = "#showtimeId")
     public List<ShowtimeSeatResponse> lockSeats(String showtimeId, LockSeatRequest request) {
         int attempt = 0;
         while (true) {
@@ -107,7 +119,9 @@ public class ShowTimeSeatService {
 
     /**
      * Unlock ghế với retry khi Optimistic Lock conflict.
+     * <p>Xoá sơ đồ ghế của suất chiếu này trong cache để cập nhật trạng thái mới.</p>
      */
+    @CacheEvict(value = "seat-map", key = "#showtimeId")
     public List<ShowtimeSeatResponse> unlockSeats(String showtimeId, UnlockSeatRequest request) {
         int attempt = 0;
         while (true) {
@@ -126,7 +140,9 @@ public class ShowTimeSeatService {
 
     /**
      * Confirm booking: chuyển ghế LOCKED → BOOKED sau khi payment thành công.
+     * <p>Xoá sơ đồ ghế của suất chiếu này trong cache.</p>
      */
+    @CacheEvict(value = "seat-map", key = "#showtimeId")
     @Transactional
     public void confirmBooking(String showtimeId, List<String> seatIds, String userId) {
         List<ShowtimeSeat> targets =
@@ -156,7 +172,9 @@ public class ShowTimeSeatService {
 
     /**
      * Release ghế BOOKED → AVAILABLE khi refund / cancel booking đã CONFIRMED.
+     * <p>Xoá sơ đồ ghế của suất chiếu này trong cache để cập nhật ghế trống.</p>
      */
+    @CacheEvict(value = "seat-map", key = "#showtimeId")
     @Transactional
     public void releaseBookedSeats(String showtimeId, List<String> seatIds) {
         List<ShowtimeSeat> targets =
@@ -172,7 +190,9 @@ public class ShowTimeSeatService {
     /**
      * Release ghế LOCKED → AVAILABLE khi cancel booking PENDING.
      * Không throw nếu ghế đã AVAILABLE (job expire chạy trước).
+     * <p>Xoá sơ đồ ghế của suất chiếu này trong cache để cập nhật ghế trống.</p>
      */
+    @CacheEvict(value = "seat-map", key = "#showtimeId")
     @Transactional
     public void releaseLockedSeats(String showtimeId, List<String> seatIds) {
         List<ShowtimeSeat> targets =
@@ -194,6 +214,11 @@ public class ShowTimeSeatService {
     // SCHEDULED JOB
     // ────────────────────────────────────────────────────────────
 
+    /**
+     * Job chạy mỗi phút để release các ghế đã bị Lock quá hạn.
+     * <p>Xoá toàn bộ sơ đồ ghế trong cache để làm mới lại trạng thái hiển thị.</p>
+     */
+    @CacheEvict(value = "seat-map", allEntries = true)
     @Scheduled(cron = "0 * * * * *")
     @Transactional
     public void releaseExpiredLocks() {
@@ -225,3 +250,4 @@ public class ShowTimeSeatService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 }
+

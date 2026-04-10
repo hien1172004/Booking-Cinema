@@ -20,6 +20,9 @@ import org.example.cinemaBooking.Repository.spefication.ShowtimeSpecification;
 import org.example.cinemaBooking.Shared.response.PageResponse;
 import org.example.cinemaBooking.Shared.enums.SeatStatus;
 import org.example.cinemaBooking.Shared.enums.ShowTimeStatus;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,7 +46,19 @@ public class ShowtimeService {
     RoomRepository roomRepository;
     private static final int BUFFER_MINUTES = 20;
 
+    /**
+     * Tạo mới một suất chiếu.
+     * <p>Xóa tất cả bộ nhớ đệm liên quan tới danh sách suất chiếu để cập nhật hiển thị mới.</p>
+     *
+     * @param request Thông tin suất chiếu cần tạo
+     * @return ShowtimeDetailResponse Chi tiết suất chiếu vừa tạo
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtimes-by-movie-date", allEntries = true),
+            @CacheEvict(value = "showtimes-by-cinema-date", allEntries = true)
+    })
     public ShowtimeDetailResponse createShowtime(CreateShowtimeRequest request){
         Room room = getRoomById(request.roomId());
         Movie movie = getMovieById(request.movieId());
@@ -84,12 +99,28 @@ public class ShowtimeService {
         return showtimeMapper.toDetailResponse(savedShowtime);
     }
 
+    /**
+     * Lấy thông tin chi tiết một suất chiếu dựa vào ID.
+     * <p>Kết quả được lưu vào cache "showtime-detail".</p>
+     *
+     * @param showtimeId ID của suất chiếu
+     * @return ShowtimeDetailResponse
+     */
+    @Cacheable(value = "showtime-detail", key = "#showtimeId")
     @Transactional(readOnly = true)
     public ShowtimeDetailResponse getShowtimeById(String showtimeId){
         Showtime showtime = getShowtimeEntityById(showtimeId);
         return showtimeMapper.toDetailResponse(showtime);
     }
 
+    /**
+     * Lấy danh sách suất chiếu cho Admin (hỗ trợ phân trang, lọc theo điều kiện).
+     * <p>Kết quả được lưu vào cache "showtimes".</p>
+     *
+     * @param request Bộ lọc truy vấn
+     * @return PageResponse
+     */
+    @Cacheable(value = "showtimes", key = "#request.hashCode()")
     @Transactional(readOnly = true)
     public PageResponse<ShowtimeSummaryResponse> getShowtime(ShowtimeFilterRequest request){
         int pageNumber = 0;
@@ -113,6 +144,16 @@ public class ShowtimeService {
                 .build();
 
     }
+
+    /**
+     * Lấy danh sách suất chiếu theo Phim và Ngày chiếu.
+     * <p>Kết quả được lưu vào cache "showtimes-by-movie-date".</p>
+     *
+     * @param movieId ID của phim
+     * @param date Ngày chiếu
+     * @return Danh sách tóm tắt suất chiếu
+     */
+    @Cacheable(value = "showtimes-by-movie-date", key = "#movieId + '-' + #date")
     @Transactional(readOnly = true)
     public List<ShowtimeSummaryResponse> getShowtimeByMovieAndDate(String movieId, LocalDate date){
         LocalDateTime from = date.atStartOfDay();
@@ -124,7 +165,15 @@ public class ShowtimeService {
         return showtimeMapper.toSummaryResponseList(showtimes);
     }
 
-
+    /**
+     * Lấy danh sách suất chiếu theo Rạp và Ngày chiếu.
+     * <p>Kết quả được lưu vào cache "showtimes-by-cinema-date".</p>
+     *
+     * @param cinemaId ID của rạp
+     * @param date Ngày chiếu
+     * @return Danh sách tóm tắt suất chiếu
+     */
+    @Cacheable(value = "showtimes-by-cinema-date", key = "#cinemaId + '-' + #date")
     @Transactional(readOnly = true)
     public List<ShowtimeSummaryResponse> getShowtimesByCinemaAndDate(String cinemaId, LocalDate date) {
         LocalDateTime from = date.atStartOfDay();
@@ -134,8 +183,22 @@ public class ShowtimeService {
         return showtimeMapper.toSummaryResponseList(showtimes);
     }
 
-
+    /**
+     * Cập nhật thông tin một suất chiếu.
+     * <p>Xóa các bộ nhớ đệm hiển thị suất chiếu và phòng chiếu tương ứng.</p>
+     *
+     * @param showtimeId ID suất chiếu
+     * @param request Yêu cầu cập nhật
+     * @return ShowtimeDetailResponse
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtimes-by-movie-date", allEntries = true),
+            @CacheEvict(value = "showtimes-by-cinema-date", allEntries = true),
+            @CacheEvict(value = "showtime-detail", key = "#showtimeId"),
+            @CacheEvict(value = "seat-map", key = "#showtimeId")
+    })
     public ShowtimeDetailResponse updateShowtime(String showtimeId, UpdateShowtimeRequest request){
         Showtime showtime = getShowtimeEntityById(showtimeId);
 
@@ -180,8 +243,20 @@ public class ShowtimeService {
         return showtimeMapper.toDetailResponse(updatedShowtime);
     }
 
-
+    /**
+     * Hủy bỏ một suất chiếu (Chuyển trạng thái sang CANCELLED và giải phóng ghế).
+     *
+     * @param showtimeId ID suất chiếu cần hủy
+     * @return ShowtimeDetailResponse
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtimes-by-movie-date", allEntries = true),
+            @CacheEvict(value = "showtimes-by-cinema-date", allEntries = true),
+            @CacheEvict(value = "showtime-detail", key = "#showtimeId"),
+            @CacheEvict(value = "seat-map", key = "#showtimeId")
+    })
     public ShowtimeDetailResponse cancelShowtime(String showtimeId){
         Showtime showtime = getShowtimeEntityById(showtimeId);
 
@@ -192,7 +267,6 @@ public class ShowtimeService {
 
         showtime.setStatus(ShowTimeStatus.CANCELLED);
         // Giải phóng tất cả ghế đang bị LOCKED / BOOKED về AVAILABLE
-        // (để refund flow xử lý riêng — ở đây chỉ cập nhật trạng thái ghế)
         showtime.getShowtimeSeats().forEach(ss -> {
             if (ss.getStatus() != SeatStatus.AVAILABLE) {
                 ss.setStatus(SeatStatus.AVAILABLE);
@@ -207,7 +281,19 @@ public class ShowtimeService {
         return showtimeMapper.toDetailResponse(cancelledShowtime);
     }
 
+    /**
+     * Xóa mềm một suất chiếu khỏi hệ thống.
+     *
+     * @param showtimeId ID suất chiếu
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtimes-by-movie-date", allEntries = true),
+            @CacheEvict(value = "showtimes-by-cinema-date", allEntries = true),
+            @CacheEvict(value = "showtime-detail", key = "#showtimeId"),
+            @CacheEvict(value = "seat-map", key = "#showtimeId")
+    })
     public void deleteShowtime(String showtimeId){
         Showtime showtime = getShowtimeEntityById(showtimeId);
 
@@ -216,8 +302,18 @@ public class ShowtimeService {
         log.warn("Showtime soft-deleted: id={}", showtimeId);
     }
 
+    /**
+     * Cron Job: Chuyển các suất chiếu đến giờ thành trạng thái ONGOING.
+     * Cập nhật lại các cache danh sách suất chiếu.
+     */
     @Scheduled(cron = "0 * * * * *")   // mỗi phút đầu
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtimes-by-movie-date", allEntries = true),
+            @CacheEvict(value = "showtimes-by-cinema-date", allEntries = true),
+            @CacheEvict(value = "showtime-detail", allEntries = true)
+    })
     public void startDueShowtimes() {
         LocalDateTime now = LocalDateTime.now();
         List<Showtime> due = showtimeRepository.findScheduledShowtimesToStart(now);
@@ -228,8 +324,18 @@ public class ShowtimeService {
         log.info("Started {} showtime(s) at {}", due.size(), now);
     }
 
+    /**
+     * Cron Job: Chuyển các suất chiếu đã kết thúc thành trạng thái FINISHED.
+     * Cập nhật lại các cache danh sách suất chiếu.
+     */
     @Scheduled(cron = "30 * * * * *")  // mỗi phút lúc :30s
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "showtimes", allEntries = true),
+            @CacheEvict(value = "showtimes-by-movie-date", allEntries = true),
+            @CacheEvict(value = "showtimes-by-cinema-date", allEntries = true),
+            @CacheEvict(value = "showtime-detail", allEntries = true)
+    })
     public void finishEndedShowtimes() {
         LocalDateTime now = LocalDateTime.now();
         List<Showtime> ongoing = showtimeRepository.findAllOngoing();

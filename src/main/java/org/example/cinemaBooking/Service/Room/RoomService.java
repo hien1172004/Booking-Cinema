@@ -16,6 +16,9 @@ import org.example.cinemaBooking.Repository.CinemaRepository;
 import org.example.cinemaBooking.Repository.RoomRepository;
 import org.example.cinemaBooking.Shared.response.PageResponse;
 import org.example.cinemaBooking.Shared.enums.Status;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,6 +36,18 @@ public class RoomService {
     RoomRepository roomRepository;
     CinemaRepository cinemaRepository;
 
+    /**
+     * Tạo mới một phòng chiếu.
+     * <p>Xoá bộ đệm các danh sách phòng chiếu và phòng chiếu theo rạp để hiển thị dữ liệu mới.</p>
+     *
+     * @param request Thông tin phòng chiếu mới
+     * @return RoomResponse Chi tiết phòng chiếu vừa tạo
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "rooms", allEntries = true),
+            @CacheEvict(value = "rooms-by-cinema", allEntries = true),
+            @CacheEvict(value = "cinema-rooms", allEntries = true)
+    })
     public RoomResponse createRoom(CreateRoomRequest request) {
         Room room = roomMapper.toRoomEntity(request);
         room.setCinema(cinemaRepository.findCinemaById(request.cinemaId()));
@@ -40,6 +55,18 @@ public class RoomService {
         return roomMapper.toResponse(roomRepository.save(room));
     }
 
+    /**
+     * Xóa một phòng chiếu.
+     * <p>Xóa bộ đệm liên quan đến phòng chiếu bị xóa.</p>
+     *
+     * @param roomId ID của phòng chiếu
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "rooms", allEntries = true),
+            @CacheEvict(value = "rooms-by-cinema", allEntries = true),
+            @CacheEvict(value = "cinema-rooms", allEntries = true),
+            @CacheEvict(value = "room", key = "#roomId")
+    })
     public void deleteRoomByID(String roomId) {
         Optional<Room> exitingRoom = roomRepository.findById(roomId);
         if (exitingRoom.isPresent()) {
@@ -53,6 +80,14 @@ public class RoomService {
     }
 
 
+    /**
+     * Lấy thông tin phòng chiếu theo ID.
+     * <p>Kết quả được lưu vào cache "room".</p>
+     *
+     * @param roomId ID của phòng chiếu
+     * @return RoomResponse
+     */
+    @Cacheable(value = "room", key = "#roomId")
     public RoomResponse getRoomByID(String roomId) {
         Optional<Room> exitingRoom = roomRepository.findById(roomId);
         if (exitingRoom.isPresent()) {
@@ -62,6 +97,18 @@ public class RoomService {
         }
     }
 
+    /**
+     * Chuyển đổi trạng thái phòng chiếu (ví dụ: đang bảo trì, hoạt động...).
+     * <p>Xóa bộ đệm để đảm bảo trạng thái hiển thị đúng.</p>
+     *
+     * @param roomId ID phòng chiếu
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "rooms", allEntries = true),
+            @CacheEvict(value = "rooms-by-cinema", allEntries = true),
+            @CacheEvict(value = "cinema-rooms", allEntries = true),
+            @CacheEvict(value = "room", key = "#roomId")
+    })
     public void toggleRoomStatus(String roomId) {
         Optional<Room> exitingRoom = roomRepository.findById(roomId);
         if (exitingRoom.isPresent()) {
@@ -75,6 +122,18 @@ public class RoomService {
         }
     }
 
+    /**
+     * Lấy danh sách tất cả phòng chiếu trong hệ thống.
+     * <p>Kết quả được lưu cache "rooms" kèm theo thông số phân trang và tìm kiếm.</p>
+     *
+     * @param page Số trang
+     * @param size Kích thước hiển thị
+     * @param sortBy Cột sắp xếp
+     * @param direction Hướng sắp xếp
+     * @param keyword Từ khóa tìm kiếm
+     * @return PageResponse
+     */
+    @Cacheable(value = "rooms", key = "#page + '-' + #size + '-' + #sortBy + '-' + #direction + '-' + (#keyword ?: '')")
     public PageResponse<RoomResponse> getAllRooms(int page, int size, String sortBy, String direction, String keyword) {
         int pageNumber = page > 0 ? page - 1 : 0;
         Sort sort = direction.equalsIgnoreCase("asc") ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
@@ -87,6 +146,19 @@ public class RoomService {
         }
         return PageResponse.<RoomResponse>builder().page(page).size(size).totalElements(roomPage.getTotalElements()).totalPages(roomPage.getTotalPages()).items(roomPage.getContent().stream().map(roomMapper::toResponse).toList()).build();
     }
+
+    /**
+     * Lấy danh sách phòng theo cụm Rạp.
+     * <p>Lưu ở cache "rooms-by-cinema" để tối ưu tốc độ người dùng xem danh sách phòng khả dụng theo Rạp.</p>
+     *
+     * @param cinemaId ID của rạp
+     * @param page Trang hiển thị
+     * @param size Kích thước trang
+     * @param sortBy Cột sắp xếp
+     * @param direction Hướng sắp xếp
+     * @return PageResponse
+     */
+    @Cacheable(value = "rooms-by-cinema", key = "#cinemaId + '-' + #page + '-' + #size + '-' + #sortBy + '-' + #direction")
     public PageResponse<RoomResponse> getRoomByCinema(String cinemaId,int page, int size, String sortBy, String direction) {
         Cinema cinema = cinemaRepository.findCinemaById(cinemaId);
         int pageNumber = page > 0 ? page - 1 : 0;
@@ -97,6 +169,19 @@ public class RoomService {
         return PageResponse.<RoomResponse>builder().page(page).size(size).totalElements(roomPage.getTotalElements()).totalPages(roomPage.getTotalPages()).items(roomPage.getContent().stream().map(roomMapper::toResponse).toList()).build();
     }
 
+    /**
+     * Cập nhật thông tin phòng chiếu (tên, số lượng ghế,...).
+     *
+     * @param id ID của phòng chiếu
+     * @param request Yêu cầu thay đổi
+     * @return RoomResponse
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "rooms", allEntries = true),
+            @CacheEvict(value = "rooms-by-cinema", allEntries = true),
+            @CacheEvict(value = "cinema-rooms", allEntries = true),
+            @CacheEvict(value = "room", key = "#id")
+    })
     public RoomResponse updateRoom(String id, UpdateRoomRequest request) {
         Optional<Room> exitingRoom = roomRepository.findById(id);
         if (exitingRoom.isPresent()) {

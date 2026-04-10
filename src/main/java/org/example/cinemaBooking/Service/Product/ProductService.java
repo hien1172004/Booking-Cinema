@@ -14,6 +14,9 @@ import org.example.cinemaBooking.Exception.ErrorCode;
 import org.example.cinemaBooking.Mapper.ProductMapper;
 import org.example.cinemaBooking.Repository.ProductRepository;
 import org.example.cinemaBooking.Shared.response.PageResponse;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,7 +34,18 @@ public class ProductService {
     ProductRepository productRepository;
     ProductMapper productMapper;
 
+    /**
+     * Tạo mới một sản phẩm (đồ ăn, thức uống).
+     * <p>Xoá bộ đệm các danh sách sản phẩm để cập nhật dữ liệu mới.</p>
+     *
+     * @param request Dữ liệu sản phẩm mới
+     * @return ProductResponse Thông tin sản phẩm vừa tạo
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "products", allEntries = true),
+            @CacheEvict(value = "products-active", allEntries = true)
+    })
     public ProductResponse createProduct(CreateProductRequest request){
         Optional<Product> existingProduct = productRepository.findByName(request.name());
 
@@ -53,7 +67,20 @@ public class ProductService {
         return productMapper.toResponse(savedProduct);
     }
 
+    /**
+     * Cập nhật thông tin sản phẩm.
+     * <p>Xoá bộ đệm danh sách sản phẩm và chi tiết sản phẩm đó.</p>
+     *
+     * @param id      ID của sản phẩm cần cập nhật
+     * @param request Thông tin cập nhật
+     * @return ProductResponse Thông tin sản phẩm sau khi cập nhật
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "products", allEntries = true),
+            @CacheEvict(value = "products-active", allEntries = true),
+            @CacheEvict(value = "product", key = "#id")
+    })
     public ProductResponse updateProduct(String id, UpdateProductRequest request){
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -71,7 +98,18 @@ public class ProductService {
         return productMapper.toResponse(product);
     }
 
+    /**
+     * Xoá mềm một sản phẩm.
+     * <p>Xoá bộ đệm danh sách sản phẩm và chi tiết sản phẩm đó.</p>
+     *
+     * @param id ID của sản phẩm cần xoá
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "products", allEntries = true),
+            @CacheEvict(value = "products-active", allEntries = true),
+            @CacheEvict(value = "product", key = "#id")
+    })
     public void deleteProduct(String id){
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -80,12 +118,31 @@ public class ProductService {
         productRepository.save(product);
     }
 
+    /**
+     * Lấy thông tin chi tiết một sản phẩm.
+     * <p>Kết quả được lưu vào cache "product".</p>
+     *
+     * @param id ID của sản phẩm
+     * @return ProductResponse Thông tin chi tiết sản phẩm
+     */
+    @Cacheable(value = "product", key = "#id")
     public ProductResponse getProductById(String id){
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
         return productMapper.toResponse(product);
     }
 
+    /**
+     * Bật/Tắt trạng thái hoạt động của sản phẩm.
+     * <p>Xoá bộ đệm danh sách sản phẩm và chi tiết sản phẩm đó.</p>
+     *
+     * @param id ID của sản phẩm
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "products", allEntries = true),
+            @CacheEvict(value = "products-active", allEntries = true),
+            @CacheEvict(value = "product", key = "#id")
+    })
     public void toggleActiveProduct(String id){
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
@@ -93,6 +150,18 @@ public class ProductService {
         productRepository.save(product);
     }
 
+    /**
+     * Lấy danh sách tất cả các sản phẩm (hỗ trợ phân trang và tìm kiếm).
+     * <p>Kết quả phân trang được lưu vào cache "products".</p>
+     *
+     * @param page      Số thứ tự trang
+     * @param size      Kích thước trang
+     * @param sortBy    Cột cần sắp xếp
+     * @param direction Hướng sắp xếp (asc/desc)
+     * @param keyword   Từ khoá tìm kiếm
+     * @return PageResponse Danh sách sản phẩm (tất cả trạng thái)
+     */
+    @Cacheable(value = "products", key = "#page + '-' + #size + '-' + #sortBy + '-' + #direction + '-' + (#keyword ?: '')")
     public PageResponse<ProductResponse> getAllProducts(
             int page,
             int size,
@@ -129,6 +198,17 @@ public class ProductService {
                 .build();
     }
 
+    /**
+     * Lấy danh sách các sản phẩm đang hoạt động (Active).
+     * <p>Kết quả phân trang được lưu vào cache "products-active".</p>
+     *
+     * @param page      Số thứ tự trang
+     * @param size      Kích thước trang
+     * @param sortBy    Cột cần sắp xếp
+     * @param direction Hướng sắp xếp (asc/desc)
+     * @return PageResponse Danh sách sản phẩm Active
+     */
+    @Cacheable(value = "products-active", key = "#page + '-' + #size + '-' + #sortBy + '-' + #direction")
     public PageResponse<ProductResponse> getProductActive(
             int page,
             int size,

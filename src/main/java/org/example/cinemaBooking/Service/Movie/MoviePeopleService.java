@@ -38,7 +38,6 @@ public class MoviePeopleService {
     MoviePeopleRepository moviePeopleRepository;
     MoviePeopleMapper moviePeopleMapper;
 
-    // ==================== ADD PEOPLE TO MOVIE ====================
 
     /**
      * Thêm nhiều người vào phim (BULK).
@@ -93,19 +92,6 @@ public class MoviePeopleService {
         // 9. Trả về danh sách đầy đủ
         return getCurrentMoviePeople(movieId);
     }
-
-//    /**
-//     * Thêm 1 người vào phim (SINGLE)
-//     */
-//    @Transactional
-//    public MoviePeopleResponse addOnePeopleToMovie(String movieId, String peopleId, String role) {
-//        AddPeopleToMovieRequest request = new AddPeopleToMovieRequest(
-//                List.of(new PeopleRoleRequest(peopleId, role))
-//        );
-//        return addPeopleToMovie(movieId, request).get(0);
-//    }
-
-    // ==================== UPDATE PEOPLE IN MOVIE ====================
 
     /**
      * Update vai trò cho nhiều người trong phim (REPLACE - giống MovieImage).
@@ -249,51 +235,6 @@ public class MoviePeopleService {
         // 10. Trả về danh sách mới nhất
         return getCurrentMoviePeople(movieId);
     }
-
-//    /**
-//     * Update role cho 1 người (SINGLE)
-//     */
-//    @Transactional
-//    public MoviePeopleResponse updateOnePeopleRole(String movieId, String peopleId, String role) {
-//        UpdateMoviePeopleRequest request = new UpdateMoviePeopleRequest(
-//                List.of(new PeopleRoleRequest(peopleId, role))
-//        );
-//        return updateMoviePeople(movieId, request).get(0);
-//    }
-
-//    /**
-//     * Swap role giữa 2 người
-//     */
-//    @Transactional
-//    public List<MoviePeopleResponse> swapPeopleRoles(String movieId, String peopleId1, String peopleId2) {
-//        log.info("Swapping roles between {} and {} in movie: {}", peopleId1, peopleId2, movieId);
-//
-//        MoviePeople mp1 = findMoviePeople(movieId, peopleId1);
-//        MoviePeople mp2 = findMoviePeople(movieId, peopleId2);
-//
-//        MovieRole role1 = mp1.getMovieRole();
-//        MovieRole role2 = mp2.getMovieRole();
-//
-//        List<PeopleRoleRequest> requests = List.of(
-//                new PeopleRoleRequest(peopleId1, role2.name()),
-//                new PeopleRoleRequest(peopleId2, role1.name())
-//        );
-//
-//        return updateMoviePeople(movieId, new UpdateMoviePeopleRequest(requests));
-//    }
-//
-//    /**
-//     * Bulk update tất cả thành 1 role
-//     */
-//    @Transactional
-//    public List<MoviePeopleResponse> bulkUpdateAllToRole(String movieId, String role, List<String> peopleIds) {
-//        List<PeopleRoleRequest> requests = peopleIds.stream()
-//                .map(id -> new PeopleRoleRequest(id, role))
-//                .toList();
-//        return updateMoviePeople(movieId, new UpdateMoviePeopleRequest(requests));
-//    }
-
-    // ==================== REMOVE PEOPLE FROM MOVIE ====================
 
     /**
      * Xóa 1 người khỏi phim.

@@ -18,6 +18,9 @@ import org.example.cinemaBooking.Repository.MovieRepository;
 import org.example.cinemaBooking.Repository.ReviewRepository;
 import org.example.cinemaBooking.Repository.UserRepository;
 import org.example.cinemaBooking.Shared.response.PageResponse;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.*;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -39,7 +42,18 @@ public class ReviewService {
     ReviewMapper reviewMapper;
 
 
+    /**
+     * Tạo mới một đánh giá cho bộ phim.
+     * <p>Xoá bộ đệm các bài đánh giá chung và điểm trung bình của phim để cập nhật lại hệ thống.</p>
+     *
+     * @param request Dữ liệu đánh giá (chứa movieId, số sao, nội dung)
+     * @return ReviewResponse thông tin đánh giá vừa tạo
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "movie-reviews", allEntries = true),
+            @CacheEvict(value = "movie-rating", key = "#request.movieId()")
+    })
     public ReviewResponse createReview(ReviewRequest request) {
         UserEntity user = getCurrentUser();
 
@@ -68,7 +82,20 @@ public class ReviewService {
     }
 
 
+    /**
+     * Cập nhật bài đánh giá của người dùng.
+     * <p>Xoá bộ đệm danh sách đánh giá chung, điểm rating của tất cả phim và chi tiết của đánh giá này.</p>
+     *
+     * @param reviewId ID của bài đánh giá cần sửa
+     * @param request  Dữ liệu đánh giá mới
+     * @return ReviewResponse thông tin sau khi cập nhật
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "movie-reviews", allEntries = true),
+            @CacheEvict(value = "movie-rating", allEntries = true),
+            @CacheEvict(value = "review", key = "#reviewId")
+    })
     public ReviewResponse updateReview(String reviewId, ReviewRequest request) {
         UserEntity user = getCurrentUser();
 
@@ -92,7 +119,18 @@ public class ReviewService {
     }
 
 
+    /**
+     * Xoá ẩn (Soft Delete) một bài đánh giá.
+     * <p>Xoá bộ đệm danh sách đánh giá chung, điểm rating chung và chi tiết bài đánh giá này.</p>
+     *
+     * @param reviewId ID của bài đánh giá cần xoá
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "movie-reviews", allEntries = true),
+            @CacheEvict(value = "movie-rating", allEntries = true),
+            @CacheEvict(value = "review", key = "#reviewId")
+    })
     public void deleteReview(String reviewId) {
         UserEntity user = getCurrentUser();
 
@@ -115,6 +153,14 @@ public class ReviewService {
     }
 
 
+    /**
+     * Lấy thông tin chi tiết một bài đánh giá (dựa vào ID).
+     * <p>Dữ liệu được lưu vào cache "review" với key là ID của đánh giá.</p>
+     *
+     * @param reviewId ID của đánh giá cần tìm
+     * @return ReviewResponse thông tin chi tiết đánh giá
+     */
+    @Cacheable(value = "review", key = "#reviewId")
     public ReviewResponse getReview(String reviewId) {
         Review review = reviewRepository.findWithMovieAndUserById(reviewId)
                 .filter(r -> !r.isDeleted())
@@ -124,6 +170,17 @@ public class ReviewService {
     }
 
 
+    /**
+     * Lấy danh sách các bài đánh giá của một bộ phim (hỗ trợ phân trang và lọc theo số sao).
+     * <p>Kết quả được lưu vào cache "movie-reviews" phân mảnh theo trang và số sao tối thiểu.</p>
+     *
+     * @param movieId       ID phim
+     * @param page          Số trang hiện tại
+     * @param size          Kích thước trang
+     * @param minimumRating Số sao tối thiểu để lọc (nếu null sẽ chuyển thành 0 trong cache key)
+     * @return PageResponse danh sách đánh giá tổng hợp
+     */
+    @Cacheable(value = "movie-reviews", key = "#movieId + '-' + #page + '-' + #size + '-' + (#minimumRating ?: 0)")
     public PageResponse<ReviewSummaryResponse> getReviewsByMovie(String movieId, int page, int size, Integer minimumRating) {
 
         int pageNumber = Math.max(page - 1, 0);
@@ -156,6 +213,14 @@ public class ReviewService {
     }
 
 
+    /**
+     * Tính điểm đánh giá trung bình của một bộ phim.
+     * <p>Được lưu vào cache "movie-rating" để giảm tải tính toán liên tục từ database.</p>
+     *
+     * @param movieId ID bộ phim cần tính trung bình
+     * @return Double số điểm trung bình (trả về 0.0 nếu chưa có ai đánh giá)
+     */
+    @Cacheable(value = "movie-rating", key = "#movieId")
     public Double getAverageRatingForMovie(String movieId) {
         Double avg = reviewRepository.getAverageRatingByMovieId(movieId);
         return avg != null ? avg : 0.0;

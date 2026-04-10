@@ -30,6 +30,14 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Dịch vụ quản lý Ticket (vé).
+ * Chức năng chính:
+ * - Lấy vé theo booking / user
+ * - Sinh QR code cho booking đã được thanh toán
+ * - Check-in vé (nhân viên quét QR tại cửa)
+ * - Expire vé chưa sử dụng sau khi suất chiếu kết thúc
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -45,7 +53,12 @@ public class TicketService {
     // READ
     // ─────────────────────────────────────────────────────────────────
 
-    /** Lấy tất cả vé của 1 booking — user chỉ xem được booking của mình */
+    /**
+     * Lấy tất cả vé của một booking — chỉ owner (user) mới xem được.
+     *
+     * @param bookingId ID của booking
+     * @return danh sách TicketResponse
+     */
     @Transactional(readOnly = true)
     public List<TicketResponse> getTicketsByBooking(String bookingId) {
         Booking booking = bookingRepository.findByIdWithDetails(bookingId)
@@ -61,7 +74,11 @@ public class TicketService {
                 .stream().map(ticketMapper::toResponse).toList();
     }
 
-    /** Lấy tất cả vé của user hiện tại */
+    /**
+     * Lấy tất cả vé của user hiện tại.
+     *
+     * @return danh sách TicketResponse của user
+     */
     @Transactional(readOnly = true)
     public List<TicketResponse> getMyTickets() {
         String userId = getCurrentUser().getId();
@@ -70,17 +87,18 @@ public class TicketService {
     }
 
     /**
-     * Lấy QR code cho booking — gửi trong email sau khi CONFIRMED.
+     * Sinh QR code (Base64) cho booking đã được CONFIRMED.
+     * Lưu ý: chỉ booking đã thanh toán (CONFIRMED) mới được cấp QR để tránh lạm dụng.
      *
-     * FIX T3: chỉ booking CONFIRMED mới được lấy QR.
-     * Booking PENDING chưa thanh toán không có QR để tránh lạm dụng.
+     * @param bookingCode mã booking
+     * @return chuỗi Base64 biểu diễn QR
      */
     @Transactional(readOnly = true)
     public String getBookingQR(String bookingCode) {
         Booking booking = bookingRepository.findByBookingCode(bookingCode)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        // FIX T3: chỉ CONFIRMED mới có QR hợp lệ
+        // chỉ CONFIRMED mới có QR hợp lệ
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
             throw new AppException(ErrorCode.BOOKING_STATUS_INVALID);
         }
@@ -88,15 +106,16 @@ public class TicketService {
         return QRCodeUtil.generateBase64QR(bookingCode);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // CHECK-IN — nhân viên scan QR tại cửa rạp
-    // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Check-in toàn bộ vé trong 1 booking bằng bookingCode từ QR.
+     * Check-in toàn bộ vé trong một booking bằng bookingCode (khi quét QR tại cửa).
+     * Quy tắc:
+     * - Chỉ vé có status = VALID mới được check-in.
+     * - Sau check-in: status -> USED, ghi thời gian checkedInAt.
+     * - Trả về thông tin showtime và các vé đã check-in cùng sản phẩm kèm theo.
      *
-     * FIX T1: validate booking.status == CONFIRMED trước khi cho check-in.
-     * FIX T2: không dùng peek() để save — collect xong rồi saveAll().
+     * @param bookingCode mã booking (lấy từ QR)
+     * @return CheckInResponse chứa thông tin showtime, vé đã check-in và products
      */
     @Transactional
     public CheckInResponse checkInByBookingCode(String bookingCode) {
@@ -107,14 +126,17 @@ public class TicketService {
         // Products — chỉ lấy 1 lần từ booking
         List<BookingProductInfo> products = tickets.isEmpty()
                 ? List.of()
-                : tickets.get(0).getBooking().getBookingProducts()
-                .stream()
-                .map(bp -> new BookingProductInfo(
-                        bp.getItemName(),
-                        bp.getItemType().name(),
-                        bp.getQuantity()
-                ))
-                .toList();
+                : tickets.stream()
+                .findFirst()
+                .map(t -> t.getBooking().getBookingProducts()
+                        .stream()
+                        .map(bp -> new BookingProductInfo(
+                                bp.getItemName(),
+                                bp.getItemType().name(),
+                                bp.getQuantity()
+                        ))
+                        .toList())
+                .orElse(List.of());
 
         // Check-in từng ghế hợp lệ
         List<Ticket> toCheckIn = new ArrayList<>();
@@ -151,14 +173,23 @@ public class TicketService {
         );
     }
 
+    /**
+     * Lấy đối tượng Showtime từ danh sách tickets kèm một số kiểm tra hợp lệ.
+     *
+     * @param tickets danh sách vé liên quan đến một booking
+     * @return Showtime liên quan
+     */
     private static Showtime getShowtime(List<Ticket> tickets) {
         if (tickets.isEmpty()) {
             throw new AppException(ErrorCode.TICKET_NOT_FOUND);
         }
 
-        Booking booking = tickets.getFirst().getBooking();
+        Booking booking = tickets.stream()
+                .findFirst()
+                .map(Ticket::getBooking)
+                .orElseThrow(() -> new AppException(ErrorCode.TICKET_NOT_FOUND));
 
-        // FIX T1: check booking đã được CONFIRMED (đã thanh toán)
+        // booking phải ở trạng thái CONFIRMED
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
             throw new AppException(ErrorCode.BOOKING_STATUS_INVALID);
         }
@@ -170,10 +201,10 @@ public class TicketService {
         return showtime;
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // SCHEDULED — expire vé sau khi suất chiếu kết thúc
-    // ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Job chạy hàng giờ để expire các vé VALID của những suất chiếu đã kết thúc.
+     */
     @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void expireUnusedTickets() {
@@ -191,8 +222,9 @@ public class TicketService {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * FIX T4: getCurrentUser() query DB để lấy userId thực,
-     * thay vì dùng auth.getName() trả về username (không phải UUID).
+     * Lấy user hiện tại (query DB để lấy UserEntity đầy đủ).
+     *
+     * @return UserEntity của user đang đăng nhập
      */
     private UserEntity getCurrentUser() {
         var auth = SecurityContextHolder.getContext().getAuthentication();

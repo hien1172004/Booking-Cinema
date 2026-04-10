@@ -17,6 +17,9 @@ import org.example.cinemaBooking.Mapper.ComboMapper;
 import org.example.cinemaBooking.Repository.ComboRepository;
 import org.example.cinemaBooking.Repository.ProductRepository;
 import org.example.cinemaBooking.Shared.response.PageResponse;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -81,7 +84,18 @@ public class ComboService {
         }
     }
 
+    /**
+     * Tạo mới một combo.
+     * <p>Xoá bộ nhớ đệm của các danh sách combo.</p>
+     *
+     * @param request Thông tin tạo mới combo
+     * @return ComboResponse thông tin combo vừa tạo
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "combos", allEntries = true),
+            @CacheEvict(value = "combos-active", allEntries = true)
+    })
     public ComboResponse createCombo(CreateComboRequest request) {
         validateNoDuplicateProducts(request.items());
         Optional<Combo> existingCombo = comboRepository.findByName(request.name());
@@ -104,7 +118,20 @@ public class ComboService {
         return comboMapper.toResponse(savedCombo);
     }
 
+    /**
+     * Cập nhật thông tin combo.
+     * <p>Xoá bộ nhớ đệm danh sách combo và chi tiết combo tương ứng.</p>
+     *
+     * @param comboId ID của combo cần cập nhật
+     * @param request Thông tin cập nhật mới
+     * @return ComboResponse thông tin combo sau cập nhật
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "combos", allEntries = true),
+            @CacheEvict(value = "combos-active", allEntries = true),
+            @CacheEvict(value = "combo", key = "#comboId")
+    })
     public ComboResponse updateCombo(String comboId, UpdateComboRequest request) {
         Combo combo = comboRepository.findByIdWithDetail(comboId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMBO_NOT_FOUND));
@@ -130,7 +157,18 @@ public class ComboService {
         return comboMapper.toResponse(saved);
     }
 
+    /**
+     * Xoá mềm một combo.
+     * <p>Xoá bộ nhớ đệm danh sách combo và chi tiết combo.</p>
+     *
+     * @param comboId ID của combo cần xoá
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "combos", allEntries = true),
+            @CacheEvict(value = "combos-active", allEntries = true),
+            @CacheEvict(value = "combo", key = "#comboId")
+    })
     public void deleteCombo(String comboId) {
         Combo combo = comboRepository.findById(comboId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMBO_NOT_FOUND));
@@ -139,12 +177,33 @@ public class ComboService {
         comboRepository.save(combo);
     }
 
+    /**
+     * Lấy thông tin chi tiết của một combo.
+     * <p>Dữ liệu được lưu trữ ở bộ đệm "combo".</p>
+     *
+     * @param comboId ID của combo
+     * @return ComboResponse thông tin chi tiết
+     */
+    @Cacheable(value = "combo", key = "#comboId")
     public ComboResponse getComboById(String comboId) {
         Combo combo = comboRepository.findByIdWithDetail(comboId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMBO_NOT_FOUND));
         return comboMapper.toResponse(combo);
     }
 
+    /**
+     * Lấy danh sách combo (có phân trang và tìm kiếm).
+     * <p>Danh sách được lưu vào bộ đệm "combos".</p>
+     *
+     * @param page      Số thứ tự trang
+     * @param size      Kích thước trang
+     * @param keyword   Từ khoá tìm kiếm theo tên
+     * @param direction Hướng sắp xếp (asc/desc)
+     * @param sortBy    Cột cần sắp xếp
+     * @return PageResponse hiển thị danh sách combo
+     */
+    @Cacheable(value = "combos",
+            key = "#page + '-' + #size + '-' + (#keyword ?: '') + '-' + #direction + '-' + #sortBy")
     public PageResponse<ComboResponse> getCombos(
             int page,
             int size,
@@ -174,6 +233,17 @@ public class ComboService {
                 .build();
     }
 
+    /**
+     * Đổi trạng thái hoạt động của combo (Active/Inactive).
+     * <p>Xóa bộ nhớ đệm để cập nhật hiển thị.</p>
+     *
+     * @param comboId ID của combo
+     */
+    @Caching(evict = {
+            @CacheEvict(value = "combos", allEntries = true),
+            @CacheEvict(value = "combos-active", allEntries = true),
+            @CacheEvict(value = "combo", key = "#comboId")
+    })
     public void toggleActiveCombo(String comboId) {
         Combo combo = comboRepository.findById(comboId)
                 .orElseThrow(() -> new AppException(ErrorCode.COMBO_NOT_FOUND));
@@ -181,6 +251,18 @@ public class ComboService {
         comboRepository.save(combo);
     }
 
+    /**
+     * Lấy danh sách các combo hiện đang Active (cho người dùng xem).
+     * <p>Danh sách được lưu vào bộ đệm "combos-active".</p>
+     *
+     * @param page      Số trang
+     * @param size      Kích thước
+     * @param sortBy    Cột sắp xếp
+     * @param direction Hướng sắp xếp
+     * @return PageResponse các combo đang hiển thị
+     */
+    @Cacheable(value = "combos-active",
+            key = "#page + '-' + #size + '-' + #sortBy + '-' + #direction")
     public PageResponse<ComboResponse>getAllCombosActive(int page, int size, String sortBy, String direction){
         int pageNumber = page > 0 ? page - 1 : 0;
         Sort.Direction sortDirection = direction.equals("asc")

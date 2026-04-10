@@ -7,6 +7,7 @@ import org.example.cinemaBooking.Repository.PaymentRepository;
 import org.example.cinemaBooking.Repository.TicketRepository;
 import org.example.cinemaBooking.Shared.enums.PaymentStatus;
 import org.example.cinemaBooking.Shared.enums.TicketStatus;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +28,12 @@ public class StatisticsService {
     PaymentRepository paymentRepository;
     TicketRepository ticketRepository;
 
+    /**
+     * Lấy tổng quan thống kê (Doanh thu, số vé, số đơn hàng, số phim).
+     * <p>Sử dụng bộ nhớ đệm "stats-summary" để giảm tải tính toán các query nặng.
+     * Key được tạo từ các tham số lọc, giá trị null sẽ được chuyển thành 'all'.</p>
+     */
+    @Cacheable(value = "stats-summary", key = "#from + '-' + #to + '-' + (#cinemaId ?: 'all') + '-' + (#movieId ?: 'all')")
     public DashboardSummaryResponse getSummary(LocalDate from, LocalDate to, String cinemaId, String movieId) {
         LocalDateTime start = from.atStartOfDay();
         LocalDateTime end = to.plusDays(1).atStartOfDay();
@@ -59,6 +66,11 @@ public class StatisticsService {
         return new DashboardSummaryResponse(revenue, tickets, null, null, bookings, movies);
     }
 
+    /**
+     * Lấy dữ liệu biểu đồ doanh thu theo thời gian.
+     * <p>Sử dụng bộ nhớ đệm "stats-revenue-chart".</p>
+     */
+    @Cacheable(value = "stats-revenue-chart", key = "#from + '-' + #to + '-' + (#cinemaId ?: 'all')")
     public List<RevenueSeriesItem>getRevenueChart(LocalDate from, LocalDate to, String cinemaId) {
         List<RevenueSeriesItem> raw = paymentRepository.getRevenueSeries(
                 PaymentStatus.SUCCESS,
@@ -68,6 +80,11 @@ public class StatisticsService {
         return fillMissingRevenueDates(raw, from, to);
     }
 
+    /**
+     * Lấy dữ liệu biểu đồ bán vé theo thời gian.
+     * <p>Sử dụng bộ nhớ đệm "stats-ticket-chart".</p>
+     */
+    @Cacheable(value = "stats-ticket-chart", key = "#from + '-' + #to + '-' + (#cinemaId ?: 'all') + '-' + (#movieId ?: 'all')")
     public List<TicketSeriesItem> getTicketChart(LocalDate from, LocalDate to, String cinemaId, String movieId) {
         List<TicketSeriesItem> raw = ticketRepository.getTicketSeries(
                 TicketStatus.VALID,
@@ -77,6 +94,11 @@ public class StatisticsService {
         return fillMissingTicketDates(raw, from, to);
     }
 
+    /**
+     * Lấy danh sách phim có doanh thu/vé bán cao nhất.
+     * <p>Sử dụng bộ nhớ đệm "stats-top-movies".</p>
+     */
+    @Cacheable(value = "stats-top-movies", key = "#from + '-' + #to + '-' + (#cinemaId ?: 'all') + '-' + #limit")
     public List<TopMovieResponse> getTopMovies(LocalDate from, LocalDate to, String cinemaId, int limit) {
         limit = Math.min(limit <= 0 ? 10 : limit, 20);
         List<TopMovieResponse> responses = ticketRepository.getTopMovies(

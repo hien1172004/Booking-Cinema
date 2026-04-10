@@ -9,7 +9,6 @@ import org.example.cinemaBooking.DTO.Request.Movie.CreatePeopleRequest;
 import org.example.cinemaBooking.DTO.Request.Movie.UpdatePeopleRequest;
 import org.example.cinemaBooking.DTO.Response.Movie.MoviePeopleResponse;
 import org.example.cinemaBooking.DTO.Response.Movie.PeopleResponse;
-
 import org.example.cinemaBooking.Entity.MoviePeople;
 import org.example.cinemaBooking.Entity.People;
 import org.example.cinemaBooking.Exception.AppException;
@@ -28,7 +27,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-
 import java.util.*;
 
 @Service

@@ -19,6 +19,9 @@ import org.example.cinemaBooking.Repository.UsedPromotionRepository;
 import org.example.cinemaBooking.Repository.UserRepository;
 import org.example.cinemaBooking.Shared.response.PageResponse;
 import org.example.cinemaBooking.Shared.enums.DiscountType;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -97,7 +100,18 @@ public class PromotionService {
     }
 
 
+    /**
+     * Tạo mới một chương trình khuyến mãi.
+     * <p>Xoá bộ đệm các danh sách khuyến mãi để cập nhật danh sách mới.</p>
+     *
+     * @param request Dữ liệu khuyến mãi
+     * @return PromotionResponse Thông tin khuyến mãi sau khi tạo
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "promotions", allEntries = true),
+            @CacheEvict(value = "promotions-active", allEntries = true)
+    })
     public PromotionResponse createPromotion(CreatePromotionRequest request) {
 
         validatePromotionData(request.startDate(), request.endDate(), request.discountType(), request.discountValue(),
@@ -136,7 +150,21 @@ public class PromotionService {
     }
 
 
+    /**
+     * Cập nhật thông tin chương trình khuyến mãi.
+     * <p>Xoá bộ đệm danh sách và chi tiết khuyến mãi tương ứng.</p>
+     *
+     * @param id ID của khuyến mãi cần cập nhật
+     * @param request Dữ liệu khuyến mãi mới
+     * @return PromotionResponse Thông tin sau khi cập nhật
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "promotions", allEntries = true),
+            @CacheEvict(value = "promotions-active", allEntries = true),
+            @CacheEvict(value = "promotion", key = "#id"),
+            @CacheEvict(value = "promotion-code", allEntries = true)
+    })
     public PromotionResponse updatePromotion(String id, UpdatePromotionRequest  request) {
 
         Promotion promotion = promotionRepository.findById(id)
@@ -150,6 +178,19 @@ public class PromotionService {
         return promotionMapper.toResponse(updatedPromotion);
     }
 
+    /**
+     * Xoá mềm chương trình khuyến mãi.
+     * <p>Xóa bộ đệm các danh sách và chi tiết khuyến mãi liên quan.</p>
+     *
+     * @param id ID khuyến mãi
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "promotions", allEntries = true),
+            @CacheEvict(value = "promotions-active", allEntries = true),
+            @CacheEvict(value = "promotion", key = "#id"),
+            @CacheEvict(value = "promotion-code", allEntries = true)
+    })
     public void deletePromotion(String id) {
         Promotion promotion = promotionRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
@@ -162,6 +203,14 @@ public class PromotionService {
         promotionRepository.save(promotion);
     }
 
+    /**
+     * Lấy thông tin chi tiết khuyến mãi theo ID.
+     * <p>Kết quả được lưu vào cache "promotion".</p>
+     *
+     * @param id ID khuyến mãi
+     * @return PromotionResponse Thông tin chi tiết
+     */
+    @Cacheable(value = "promotion", key = "#id")
     public PromotionResponse getPromotionById(String id) {
         Promotion promotion = promotionRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
@@ -169,6 +218,14 @@ public class PromotionService {
         return promotionMapper.toResponse(promotion);
     }
 
+    /**
+     * Lấy thông tin chi tiết khuyến mãi theo Code.
+     * <p>Kết quả được lưu vào cache "promotion-code".</p>
+     *
+     * @param code Mã khuyến mãi
+     * @return PromotionResponse Thông tin chi tiết
+     */
+    @Cacheable(value = "promotion-code", key = "#code")
     public PromotionResponse getPromotionByCode(String code) {
         Promotion promotion = promotionRepository.findByCode(code)
                 .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
@@ -176,6 +233,18 @@ public class PromotionService {
         return promotionMapper.toResponse(promotion);
     }
 
+    /**
+     * Lấy danh sách khuyến mãi dành cho Admin (hỗ trợ phân trang, lọc).
+     * <p>Kết quả theo bộ lọc được lưu cache "promotions".</p>
+     *
+     * @param page Số trang
+     * @param size Kích thước trang
+     * @param sortBy Cột sắp xếp
+     * @param direction Hướng sắp xếp
+     * @param request Bộ lọc tìm kiếm
+     * @return PageResponse Danh sách khuyến mãi
+     */
+    @Cacheable(value = "promotions", key = "#page + '-' + #size + '-' + #sortBy + '-' + #direction + '-' + (#request.code() ?: '') + '-' + (#request.name() ?: '')")
     public PageResponse<PromotionResponse> getPromotions(
             int page,
             int size,
@@ -211,6 +280,17 @@ public class PromotionService {
     }
 
 
+    /**
+     * Lấy danh sách khuyến mãi đang khả dụng (Active) để hiển thị cho người dùng.
+     * <p>Được cache lại "promotions-active".</p>
+     *
+     * @param page Số trang
+     * @param size Kích thước trang
+     * @param sortBy Cột sắp xếp
+     * @param direction Hướng sắp xếp
+     * @return PageResponse Danh sách khuyến mãi hiển thị
+     */
+    @Cacheable(value = "promotions-active", key = "#page + '-' + #size + '-' + #sortBy + '-' + #direction")
     public PageResponse<PromotionResponse> getActivePromotions(int page, int size, String sortBy, String direction) {
         int pageNumber = Math.max(0, page - 1);
         Sort.Direction sortDirection = "desc".equalsIgnoreCase(direction) ? Sort.Direction.DESC : Sort.Direction.ASC;
@@ -231,6 +311,9 @@ public class PromotionService {
                 .build();
     }
 
+    /**
+     * Xem trước (Preview) thông tin khuyến mãi áp dụng cho đơn hàng để lấy số tiền giảm.
+     */
     @Transactional
     public ValidationResultResponse previewPromotion(String code, String userId, BigDecimal orderValue) {
         log.info("User {} using promotion: {}", userId, code);
@@ -262,7 +345,20 @@ public class PromotionService {
                 .build();
     }
 
+    /**
+     * Áp dụng khuyến mãi và tăng số lượng đã sử dụng (Dùng trong lúc tạo Đơn hàng/Thanh toán).
+     * <p>Do số lượng thay đổi nên phải xóa bộ đệm thông tin khuyến mãi tránh hiển thị sai số lượng tồn.</p>
+     *
+     * @param promotionId ID của khuyến mãi
+     * @param userId      ID người dùng dùng mã
+     */
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "promotions", allEntries = true),
+            @CacheEvict(value = "promotions-active", allEntries = true),
+            @CacheEvict(value = "promotion", key = "#promotionId"),
+            @CacheEvict(value = "promotion-code", allEntries = true)
+    })
     public void applyPromotion(String promotionId, String userId) {
 
         // 1. Validate tồn tại trước

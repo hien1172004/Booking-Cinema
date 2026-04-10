@@ -1,22 +1,17 @@
 package org.example.cinemaBooking.Service.Booking;
 
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.example.cinemaBooking.DTO.Request.Booking.CreateBookingRequest;
-import org.example.cinemaBooking.DTO.Request.Payment.CreatePaymentRequest;
 import org.example.cinemaBooking.DTO.Response.Booking.BookingResponse;
 import org.example.cinemaBooking.DTO.Response.Booking.BookingSummaryResponse;
-import org.example.cinemaBooking.DTO.Response.Payment.PaymentResponse;
 import org.example.cinemaBooking.Entity.*;
 import org.example.cinemaBooking.Exception.AppException;
 import org.example.cinemaBooking.Exception.ErrorCode;
 import org.example.cinemaBooking.Mapper.BookingMapper;
 import org.example.cinemaBooking.Repository.*;
-import org.example.cinemaBooking.Service.Notification.NotificationService;
-import org.example.cinemaBooking.Service.Payment.PaymentService;
 import org.example.cinemaBooking.Service.Promotion.PromotionService;
 import org.example.cinemaBooking.Service.Showtime.ShowTimeSeatService;
 import org.example.cinemaBooking.Shared.enums.BookingStatus;
@@ -33,6 +28,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Dịch vụ quản lý Booking (đặt vé).
+ *
+ * Trách nhiệm chính:
+ * - Tạo booking (PENDING)
+ * - Xác nhận booking sau khi thanh toán thành công
+ * - Huỷ booking (do user hoặc tự động khi quá hạn)
+ * - Quản lý trạng thái vé/ghế tương ứng (thông qua ShowTimeSeatService)
+ *
+ * Ghi chú:
+ * - Các thao tác liên quan tới trạng thái ghế (LOCKED/BOOKED) được thực hiện
+ *   bởi `ShowTimeSeatService` để đảm bảo tính nhất quán đồng bộ trên hàng ghế.
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -40,7 +48,6 @@ import java.util.UUID;
 public class BookingService {
 
     BookingRepository     bookingRepository;
-    TicketRepository      ticketRepository;
     ShowtimeSeatRepository showtimeSeatRepository;
     ShowtimeRepository    showtimeRepository;
     PromotionRepository   promotionRepository;
@@ -50,24 +57,25 @@ public class BookingService {
     UserRepository        userRepository;
     ShowTimeSeatService   showtimeSeatService;
     PromotionService      promotionService;
-    NotificationService   notificationService;
     // Thời gian user có để hoàn tất payment — phải >= LOCK_DURATION_MINUTES
     static final int BOOKING_EXPIRY_MINUTES = 10;
 
-    // ─────────────────────────────────────────────────────────────────
-    // CREATE
-    // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Tạo booking PENDING.
+     * Tạo một Booking ở trạng thái PENDING (chờ thanh toán).
      *
-     * Flow A:
-     *   1. Validate ghế LOCKED bởi đúng user, lockedUntil còn hạn   (FIX Bug-7)
-     *   2. Tính giá vé + đồ ăn + promotion
-     *   3. Lưu Booking + Ticket (status = PENDING_PAYMENT)           (FIX Bug-2)
-     *   4. KHÔNG chuyển ghế → ghế vẫn LOCKED cho đến khi payment IPN confirm
+     * Quy trình tóm tắt:
+     *  1) Xác thực ghế phải đang ở trạng thái LOCKED bởi chính user và chưa hết hạn lock.
+     *  2) Tính tổng tiền vé + sản phẩm (combo/product) và áp dụng khuyến mãi (nếu có).
+     *  3) Lưu Booking và các Ticket kèm trạng thái Ticket = PENDING_PAYMENT.
      *
-     * Ghế sẽ được chuyển LOCKED → BOOKED bởi PaymentService sau khi IPN thành công.
+     * Lưu ý:
+     * - Phương thức này KHÔNG chuyển trạng thái ghế sang BOOKED. Việc chuyển LOCKED→BOOKED
+     *   sẽ được thực hiện khi có xác nhận thanh toán (IPN) bởi `confirmBooking`.
+     *
+     * @param request Yêu cầu tạo booking (chứa showtimeId, danh sách seatIds, products, promotionCode)
+     * @return BookingResponse thông tin booking vừa tạo
+     * @throws AppException khi dữ liệu đầu vào không hợp lệ, ghế không tồn tại/không được khoá, hoặc showtime không thể book
      */
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request) {
@@ -171,10 +179,14 @@ public class BookingService {
         return bookingMapper.toResponse(saved);
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // READ
-    // ─────────────────────────────────────────────────────────────────
 
+    /**
+     * Lấy chi tiết booking theo ID. Chỉ owner (user cùng ID) được truy xuất.
+     *
+     * @param bookingId ID booking
+     * @return BookingResponse chi tiết booking
+     * @throws AppException nếu booking không tồn tại hoặc không thuộc quyền sở hữu
+     */
     @Transactional(readOnly = true)
     public BookingResponse getBookingById(String bookingId) {
         Booking booking = getBookingOrThrow(bookingId);
@@ -182,6 +194,11 @@ public class BookingService {
         return bookingMapper.toResponse(booking);
     }
 
+    /**
+     * Lấy danh sách tóm tắt các booking của người đang đăng nhập.
+     *
+     * @return danh sách BookingSummaryResponse
+     */
     @Transactional(readOnly = true)
     public List<BookingSummaryResponse> getMyBookings() {
         String userId = getCurrentUser().getId();
@@ -194,14 +211,19 @@ public class BookingService {
     // ─────────────────────────────────────────────────────────────────
 
     /**
-     * Confirm booking sau khi payment IPN thành công.
+     * Xác nhận booking sau khi thanh toán thành công (IPN).
      *
-     * Gọi bởi PaymentService — KHÔNG gọi trực tiếp từ controller.
-     * PaymentService cần đảm bảo transaction độc lập (REQUIRES_NEW).
+     * Thao tác sẽ:
+     *  - Kiểm tra trạng thái Booking hợp lệ và chưa hết hạn
+     *  - Chuyển trạng thái ghế LOCKED → BOOKED (qua `ShowTimeSeatService`)
+     *  - Chuyển trạng thái Ticket → VALID
+     *  - Áp dụng promotion (tăng counter) nếu còn slot
      *
-     * FIX Bug-1 (BookingService): ghế được chuyển LOCKED→BOOKED tại đây.
-     * FIX Bug-2: tickets chuyển PENDING_PAYMENT → VALID tại đây.
-     * FIX RC-4: confirmBooking trong ShowTimeSeatService đã check lockedUntil.
+     * Lưu ý: phương thức này thường được gọi từ `PaymentService` trong một giao dịch riêng
+     * để đảm bảo tính nguyên tử giữa cập nhật trạng thái giao dịch và booking.
+     *
+     * @param bookingId ID của booking cần confirm
+     * @throws AppException nếu booking không tồn tại, hết hạn hoặc trạng thái không hợp lệ
      */
     @Transactional
     public void confirmBooking(String bookingId) {
@@ -255,15 +277,16 @@ public class BookingService {
         log.info("Booking confirmed: code={}", booking.getBookingCode());
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // CANCEL
-    // ─────────────────────────────────────────────────────────────────
 
     /**
-     * User chủ động cancel booking.
+     * Hủy booking do user yêu cầu.
      *
-     * FIX Bug-6: phân biệt ghế đang LOCKED (PENDING) vs BOOKED (CONFIRMED)
-     * để gọi đúng method release.
+     * Quy tắc:
+     * - Không cho hủy booking đã được confirm (để đảm bảo luồng thanh toán và refund rõ ràng)
+     *
+     * @param bookingId ID booking cần huỷ
+     * @return BookingResponse thông tin booking sau khi hủy
+     * @throws AppException khi booking không tồn tại, không thuộc quyền sở hữu, hoặc đã xác nhận
      */
     @Transactional
     public BookingResponse cancelBooking(String bookingId) {
@@ -285,8 +308,11 @@ public class BookingService {
     }
 
     /**
-     * Internal cancel — dùng bởi cả user cancel lẫn scheduled job.
-     * FIX Bug-3 & Bug-6: booking PENDING → ghế đang LOCKED → dùng releaseLockedSeats().
+     * Hủy nội bộ (dùng cho scheduled job hoặc logic backend).
+     *
+     * Hành vi giống `cancelBooking` nhưng không kiểm quyền user.
+     *
+     * @param bookingId ID booking cần huỷ
      */
     @Transactional
     public void cancelBookingInternal(String bookingId) {
@@ -297,18 +323,12 @@ public class BookingService {
         log.warn("Booking cancelled (internal): code={}", booking.getBookingCode());
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // SCHEDULED — expire booking PENDING quá hạn
-    // ─────────────────────────────────────────────────────────────────
-
     /**
-     * FIX Bug-3: gọi releaseLockedSeats() thay vì releaseBookedSeats()
-     * vì booking PENDING → ghế đang LOCKED, chưa BOOKED.
+     * Job định kỳ chạy mỗi phút để hủy các booking PENDING đã quá hạn.
      *
-     * FIX RC-4 (BookingService): dùng pessimistic lock trên booking query
-     * để tránh xung đột với confirmBooking() đang chạy đồng thời.
-     * (Cần thêm @Lock(PESSIMISTIC_WRITE) vào findExpiredPendingBookings
-     * hoặc xử lý bằng status check sau khi acquire.)
+     * Lưu ý implement:
+     * - Nên dùng truy vấn kèm lock phù hợp (pessimistic write) ở tầng repository
+     *   nếu có khả năng xung đột với `confirmBooking` đang chạy đồng thời.
      */
     @Scheduled(cron = "0 * * * * *")
     @Transactional
@@ -333,13 +353,10 @@ public class BookingService {
         log.info("Expired {} stale booking(s)", expired.size());
     }
 
-    // ─────────────────────────────────────────────────────────────────
-    // PRIVATE HELPERS
-    // ─────────────────────────────────────────────────────────────────
-
     /**
-     * Dùng chung cho user cancel và internal cancel.
-     * Phân biệt trạng thái ghế theo booking status.
+     * Hủy và trả ghế tùy theo trạng thái booking (LOCKED vs BOOKED).
+     *
+     * @param booking đối tượng booking đang được hủy
      */
     private void doCancel(Booking booking) {
         BookingStatus oldStatus = booking.getStatus(); // lưu trước
@@ -386,8 +403,8 @@ public class BookingService {
     }
 
     /**
-     * FIX Bug-5: dùng UUID thay vì currentTimeMillis để tránh trùng lặp.
-     * Unique constraint trên DB là tầng bảo vệ cuối.
+     * Sinh mã booking ngẫu nhiên (BKxxxxx). Dùng UUID để giảm khả năng trùng.
+     * @return mã booking dạng chuỗi
      */
     private String generateBookingCode() {
         return "BK" + UUID.randomUUID()

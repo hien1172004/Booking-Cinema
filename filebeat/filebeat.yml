@@ -15,17 +15,16 @@ filebeat.inputs:
     multiline.negate: true
     multiline.match: after
 
-  # Đọc log từ Docker containers (optional)
+  # Đọc log từ Docker containers (Vô hiệu hóa để tránh lỗi trên Windows)
   - type: container
-    enabled: true
+    enabled: false
     paths:
       - /var/lib/docker/containers/*/*.log
-    processors:
-      - add_docker_metadata:
-          host: "unix:///var/run/docker.sock"
 
 output.logstash:
   hosts: ["logstash:5044"]
+  worker: 1
+  backoff.max: 15s
 
 # Logging của chính Filebeat
 logging.level: warning

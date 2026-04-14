@@ -34,12 +34,10 @@ import java.util.Map;
 public class RedisConfig {
 
     /**
-     * Bean ObjectMapper dùng riêng cho Redis.
-     * Đặt tên "redisObjectMapper" để tránh xung đột với ObjectMapper mặc định của Spring Boot.
+     * Phương thức hỗ trợ tạo ObjectMapper dùng riêng cho Redis.
+     * Không đặt @Bean để tránh bị Spring Boot sử dụng làm primary ObjectMapper cho Web MVC.
      */
-    @Bean
-    public ObjectMapper redisObjectMapper() {
-        // Whitelist các package được phép deserialize — tránh deserialization attack
+    private ObjectMapper createRedisObjectMapper() {
         PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfSubType("org.example.cinemaBooking")
                 .allowIfSubType("java.util")
@@ -56,11 +54,11 @@ public class RedisConfig {
     }
 
     /**
-     * RedisTemplate dùng cho các thao tác thủ công với Redis (opsForValue, opsForHash, ...).
+     * RedisTemplate dùng cho các thao tác thủ công với Redis.
      */
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory,
-                                                       ObjectMapper redisObjectMapper) {
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+        ObjectMapper redisObjectMapper = createRedisObjectMapper();
         GenericJackson2JsonRedisSerializer serializer =
                 new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 
@@ -78,8 +76,8 @@ public class RedisConfig {
      * CacheManager dùng cho @Cacheable, @CachePut, @CacheEvict.
      */
     @Bean
-    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory,
-                                          ObjectMapper redisObjectMapper) {
+    public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        ObjectMapper redisObjectMapper = createRedisObjectMapper();
         GenericJackson2JsonRedisSerializer serializer =
                 new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 

@@ -40,6 +40,7 @@ Hệ thống đặt vé xem phim trực tuyến được xây dựng bằng **Sp
 - Log tập trung qua **ELK Stack** (Elasticsearch + Logstash + Kibana)
 - Caching với **Redis**
 - Upload ảnh lên **Cloudinary**
+- **Rate Limit phân tầng** bảo vệ API (Global & Annotation-based)
 - API documentation với **Swagger UI**
 - Healthcheck cho tất cả services
 
@@ -60,8 +61,8 @@ Hệ thống đặt vé xem phim trực tuyến được xây dựng bằng **Sp
 | **ORM** | Spring Data JPA / Hibernate |
 | **Mapping** | MapStruct 1.5.5 |
 | **API Docs** | Springdoc OpenAPI (Swagger UI) |
-| **Containerization** | Docker, Docker Compose |
 | **Build Tool** | Maven |
+| **Rate Limit** | Bucket4j 8.10.1 (Redis backup) |
 
 ---
 
@@ -130,13 +131,17 @@ Chỉnh sửa file `.env` với thông tin của bạn (xem [Cấu Hình Môi Tr
 ./mvnw clean package -DskipTests
 ```
 
-> Trên Windows: `mvnw.cmd clean package -DskipTests`
+> Trên Windows: `.\mvnw.cmd clean package -DskipTests`
+> 
+> *Lưu ý: Tệp `pom.xml` đã được cấu hình cờ `-parameters` để đảm bảo Spring Boot 3 nhận diện constructor chính xác.*
 
 ### Bước 4: Khởi chạy toàn bộ hệ thống với Docker
 
 ```bash
 docker compose up -d
 ```
+
+> **Khởi tạo dữ liệu**: Tệp `init.sql` sẽ được thực thi khi bạn start lần đầu. Nếu bạn muốn chạy lại tệp này, hãy dùng lệnh `docker compose down -v` để reset dữ liệu hệ thống.
 
 Lần đầu chạy sẽ mất vài phút để pull images về. Kiểm tra trạng thái:
 
@@ -321,6 +326,16 @@ Truy cập **Swagger UI** tại `http://localhost:8081/swagger-ui.html` để xe
 | **Notifications** | `/api/v1/notifications` | Thông báo |
 | **Statistics** | `/api/v1/statistics` | Thống kê doanh thu |
 | **Dashboard** | `/api/v1/dashboard` | Tổng quan admin |
+| **Rate Limit Info** | Headers | `X-RateLimit-Remaining`, `Retry-After` |
+
+### Chiến lược Rate Limit (Tiered Strategy)
+
+| Tầng (Tier) | API | Hạn mức |
+|---|---|---|
+| **Strict** | Auth, Booking, Payment | 3-5 req/phút |
+| **Moderate** | Statistics, Search | 10-30 req/phút |
+| **Relaxed** | Movie Details, Recommend | 60 req/phút |
+| **Global** | Tất cả API (Filter) | 100 req/phút |
 
 ---
 
@@ -424,3 +439,16 @@ Cinema-Booking-System/
 > ES_JAVA_OPTS=-Xms256m -Xmx256m   # Elasticsearch
 > LS_JAVA_OPTS=-Xmx128m -Xms128m   # Logstash
 > ```
+
+---
+
+## 🛠 Troubleshooting (Windows / WSL2)
+
+Nếu bạn gặp lỗi khi chạy trên Windows, hãy kiểm tra các điểm sau:
+
+1. **Lỗi `Permission denied` (Logs)**: 
+   - Hệ thống đã chuyển sang sử dụng **Named Volume** (`cinema_logs`) trong `docker-compose.yml` để tránh xung đột quyền giữa Windows host và Linux container. Không cần can thiệp thủ công.
+2. **Lỗi Filebeat `strict.perms`**: 
+   - Đã cấu hình `--strict.perms=false` trong `docker-compose.yml`. Nếu bạn chỉnh sửa tệp `filebeat.yml`, hãy đảm bảo không dùng định dạng JSON nếu log đầu vào là Plain Text.
+3. **Lỗi `init.sql` không chạy**: 
+   - Chạy `docker compose down -v` để xóa volume dữ liệu cũ, MySQL sẽ thực thi lại tệp này khi khởi tạo lại.

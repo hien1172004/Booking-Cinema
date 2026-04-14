@@ -19,6 +19,7 @@ import org.example.cinemaBooking.DTO.Response.User.RegisterResponse;
 import org.example.cinemaBooking.Service.Auth.AuthService;
 import org.example.cinemaBooking.Service.Auth.PasswordResetService;
 import org.example.cinemaBooking.Shared.constant.ApiPaths;
+import org.example.cinemaBooking.Shared.constraints.RateLimit;
 import org.example.cinemaBooking.Shared.response.ApiResponse;
 import org.example.cinemaBooking.Shared.response.IntrospectResponse;
 import org.springframework.web.bind.annotation.*;
@@ -37,6 +38,7 @@ public class AuthenticationController {
     //API Register
     @Operation(summary = "Đăng ký người dùng mới", description = "Tạo tài khoản người dùng mới với thông tin cung cấp.", security = {})
     @PostMapping(ApiPaths.Auth.REGISTER)
+    @RateLimit(capacity = 3, refillPerMinute = 3)
     public ApiResponse<RegisterResponse> registerUser(@RequestBody @Valid RegisterRequest registerRequest) {
         return ApiResponse.<RegisterResponse>builder()
                 .success(true)
@@ -46,6 +48,7 @@ public class AuthenticationController {
     //API Login
     @Operation(summary = "Đăng nhập", description = "Xác thực người dùng và trả về access token.", security = {})
     @PostMapping(ApiPaths.Auth.LOGIN)
+    @RateLimit(capacity = 5, refillPerMinute = 5)
     public ApiResponse<LoginResponse> loginUser(@RequestBody @Valid LoginRequest loginRequest) {
         return ApiResponse.<LoginResponse>builder()
                 .success(true)
@@ -91,6 +94,7 @@ public class AuthenticationController {
      */
     @Operation(summary = "Quên mật khẩu", description = "Yêu cầu gửi link đặt lại mật khẩu đến email người dùng.", security = {})
     @PostMapping(ApiPaths.Auth.FORGOT_PASSWORD)
+    @RateLimit(capacity = 3, refillPerMinute = 3)
     public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         passwordResetService.forgotPassword(request);
         log.info("[AUTH CONTROLLER] Password reset requested for email: {}", request.getEmail());
@@ -122,6 +126,7 @@ public class AuthenticationController {
      */
     @Operation(summary = "Đặt lại mật khẩu", description = "Đặt lại mật khẩu người dùng bằng token hợp lệ.", security = {})
     @PostMapping(ApiPaths.Auth.RESET_PASSWORD)
+    @RateLimit(capacity = 3, refillPerMinute = 3)
     public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         passwordResetService.resetPassword(request);
         return ApiResponse.<Void>builder()

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.example.cinemaBooking.Shared.contraints.EnumValidator;
+import org.example.cinemaBooking.Shared.constraints.EnumValidator;
 import org.example.cinemaBooking.Shared.enums.AgeRating;
 
 import java.time.LocalDate;

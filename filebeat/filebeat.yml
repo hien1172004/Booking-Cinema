@@ -1,11 +1,12 @@
+# Bỏ qua kiểm tra quyền file (Cần thiết khi chạy trên Windows Docker)
+setup.strict.perms: false
+
 filebeat.inputs:
   # Đọc từ file log của Spring Boot app
   - type: log
     enabled: true
     paths:
       - /usr/share/cinema/logs/*.log
-    json.keys_under_root: true
-    json.add_error_key: true
     fields:
       service: cinema-booking
       environment: dev

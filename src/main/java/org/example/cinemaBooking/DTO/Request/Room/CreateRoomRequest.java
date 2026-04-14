@@ -2,7 +2,7 @@ package org.example.cinemaBooking.DTO.Request.Room;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.example.cinemaBooking.Shared.contraints.EnumValidator;
+import org.example.cinemaBooking.Shared.constraints.EnumValidator;
 import org.example.cinemaBooking.Shared.enums.RoomType;
 
 public record CreateRoomRequest(

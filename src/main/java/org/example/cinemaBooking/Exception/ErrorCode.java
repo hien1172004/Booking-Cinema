@@ -163,7 +163,8 @@ public enum ErrorCode {
     FILE_TYPE_INVALID(1150, "File type must be image/video", HttpStatus.BAD_REQUEST),
     FILE_DELETE_FAILED(1151, "Failed to delete file", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_UPLOAD_FAILED(1152, "Failed to upload file", HttpStatus.INTERNAL_SERVER_ERROR),
-    USER_BANNED(1153, "User is banned", HttpStatus.FORBIDDEN)
+    USER_BANNED(1153, "User is banned", HttpStatus.FORBIDDEN),
+    TOO_MANY_REQUESTS(1154, "Too many requests", HttpStatus.TOO_MANY_REQUESTS);
     ;
 
 

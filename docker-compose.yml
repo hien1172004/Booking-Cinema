@@ -9,6 +9,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       interval: 10s
@@ -92,7 +93,8 @@ services:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./logs:/usr/share/cinema/logs:ro # Mount log folder của app
+      - cinema_logs:/usr/share/cinema/logs:ro # Mount log folder của app
+    command: filebeat -e --strict.perms=false
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -136,11 +138,13 @@ services:
       TMN_CODE: ${TMN_CODE}
       TMN_KEY: ${TMN_KEY}
     volumes:
-      - ./logs:/app/logs # Mount logs ra ngoài để Filebeat đọc
+      - cinema_logs:/app/logs # Sử dụng Named Volume để tránh lỗi permission trên Windows
     restart: unless-stopped
 
 volumes:
   mysql_data:
     driver: local
   esdata:
+    driver: local
+  cinema_logs:
     driver: local

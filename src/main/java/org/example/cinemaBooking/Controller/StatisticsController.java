@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.cinemaBooking.DTO.Response.Statistics.*;
 import org.example.cinemaBooking.Service.Statistics.StatisticsService;
 import org.example.cinemaBooking.Shared.constant.ApiPaths;
+import org.example.cinemaBooking.Shared.constraints.RateLimit;
 import org.example.cinemaBooking.Shared.response.ApiResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,6 +34,7 @@ public class StatisticsController {
         @SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("hasRole('ADMIN')")
         @GetMapping(ApiPaths.Statistic.SUMMARY)
+        @RateLimit(capacity = 10, refillPerMinute = 10)
         public ApiResponse<DashboardSummaryResponse> getStatisticsSummary(
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -51,6 +53,7 @@ public class StatisticsController {
         @SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("hasRole('ADMIN')")
         @GetMapping(ApiPaths.Statistic.REVENUE_CHART)
+        @RateLimit(capacity = 10, refillPerMinute = 10)
         ApiResponse<List<RevenueSeriesItem>> getRevenueChart(
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -68,6 +71,7 @@ public class StatisticsController {
         @SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("hasRole('ADMIN')")
         @GetMapping(ApiPaths.Statistic.TICKET_CHART)
+        @RateLimit(capacity = 10, refillPerMinute = 10)
         ApiResponse<List<TicketSeriesItem>> getTicketsSoldChart(
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -86,6 +90,7 @@ public class StatisticsController {
         @SecurityRequirement(name = "bearerAuth")
         @PreAuthorize("hasRole('ADMIN')")
         @GetMapping(ApiPaths.Statistic.TOP_MOVIES)
+        @RateLimit(capacity = 10, refillPerMinute = 10)
         ApiResponse<List<TopMovieResponse>> getTopMovies(
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,

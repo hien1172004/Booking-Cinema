@@ -12,6 +12,7 @@ import org.example.cinemaBooking.DTO.Response.Booking.BookingResponse;
 import org.example.cinemaBooking.DTO.Response.Booking.BookingSummaryResponse;
 import org.example.cinemaBooking.Service.Booking.BookingService;
 import org.example.cinemaBooking.Shared.constant.ApiPaths;
+import org.example.cinemaBooking.Shared.constraints.RateLimit;
 import org.example.cinemaBooking.Shared.response.ApiResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -31,6 +32,7 @@ public class BookingController {
     @SecurityRequirement(name = "bearerAuth")
     @PostMapping
     @PreAuthorize("isAuthenticated()")
+    @RateLimit(capacity = 5, refillPerMinute = 5)
     public ApiResponse<BookingResponse> createBooking(@Valid @RequestBody CreateBookingRequest request) {
         var response = bookingService.createBooking(request);
         log.info("[BookingController] createBooking - Booking created with code: {}", response.bookingCode());

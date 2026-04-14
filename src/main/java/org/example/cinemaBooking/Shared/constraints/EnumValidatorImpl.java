@@ -1,4 +1,4 @@
-package org.example.cinemaBooking.Shared.contraints;
+package org.example.cinemaBooking.Shared.constraints;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;

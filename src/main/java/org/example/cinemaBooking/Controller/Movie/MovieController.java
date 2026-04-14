@@ -15,6 +15,7 @@ import org.example.cinemaBooking.DTO.Response.Movie.MovieResponse;
 import org.example.cinemaBooking.Service.Movie.MovieService;
 import org.example.cinemaBooking.Service.Movie.PeopleService;
 import org.example.cinemaBooking.Shared.constant.ApiPaths;
+import org.example.cinemaBooking.Shared.constraints.RateLimit;
 import org.example.cinemaBooking.Shared.response.ApiResponse;
 import org.example.cinemaBooking.Shared.response.PageResponse;
 import org.example.cinemaBooking.Shared.enums.AgeRating;
@@ -95,6 +96,7 @@ public class MovieController {
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @RateLimit(capacity = 30, refillPerMinute = 30)
     public ApiResponse<PageResponse<MovieResponse>> getMovies(
 
             @RequestParam(required = false) String keyword,
@@ -128,6 +130,7 @@ public class MovieController {
     @Operation(summary = "Lấy chi tiết phim theo ID",
             description = "Lấy chi tiết phim theo ID.")
     @GetMapping("/{id}")
+    @RateLimit(capacity = 60, refillPerMinute = 60)
     public ApiResponse<MovieResponse> getMovieDetailById(@PathVariable String id) {
         MovieResponse movieResponse = movieService.getMovieById(id);
         log.info("[MOVIE CONTROLLER] Get movie detail for movie with id: {}", id);
@@ -141,6 +144,7 @@ public class MovieController {
             description = "Lấy chi tiết phim theo slug. Không yêu cầu quyền.")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/slug/{slug}")
+    @RateLimit(capacity = 60, refillPerMinute = 60)
     public ApiResponse<MovieResponse> getMovieDetailBySlug(@PathVariable String slug) {
         MovieResponse movieResponse = movieService.getMovieBySlug(slug);
         log.info("[MOVIE CONTROLLER] Get movie detail for movie with slug: {}", slug);
@@ -154,6 +158,7 @@ public class MovieController {
             description = "Lấy danh sách phim đang chiếu với phân trang. Không yêu cầu quyền.")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping(ApiPaths.Movie.NOW_SHOWING)
+    @RateLimit(capacity = 60, refillPerMinute = 60)
     public ApiResponse<PageResponse<MovieResponse>> getNowShowingMovies(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size){
@@ -168,6 +173,7 @@ public class MovieController {
             description = "Lấy danh sách phim sắp chiếu với phân trang. Không yêu cầu quyền.")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping(ApiPaths.Movie.COMING_SOON)
+    @RateLimit(capacity = 60, refillPerMinute = 60)
     public ApiResponse<PageResponse<MovieResponse>> getComingSoonMovies(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
@@ -182,6 +188,7 @@ public class MovieController {
     @Operation(summary = "Tìm kiếm phim",
             description = "Tìm kiếm phim theo từ khóa với phân trang. Không yêu cầu quyền.")
     @GetMapping(ApiPaths.Movie.SEARCH + "/{keyword}")
+    @RateLimit(capacity = 30, refillPerMinute = 30)
     public ApiResponse<PageResponse<MovieResponse>> searchMovies(
             @PathVariable String keyword,
             @RequestParam(defaultValue = "0") int page,
@@ -196,6 +203,7 @@ public class MovieController {
     @Operation(summary = "Gợi ý phim",
             description = "Lấy danh sách các bộ phim được đề xuất dựa trên độ hot (doanh thu, số lượng vé, đánh giá). Không yêu cầu quyền.")
     @GetMapping("/recommend")
+    @RateLimit(capacity = 60, refillPerMinute = 60)
     public ApiResponse<java.util.List<MovieRecommendResponse>> recommendMovies() {
         List<MovieRecommendResponse> movies = movieService.recommend();
         return ApiResponse.<java.util.List<MovieRecommendResponse>>builder()

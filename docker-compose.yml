@@ -137,6 +137,8 @@ services:
       JWT_SIGNER_KEY: ${JWT_SIGNER_KEY}
       TMN_CODE: ${TMN_CODE}
       TMN_KEY: ${TMN_KEY}
+      # Gemini AI
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     volumes:
       - cinema_logs:/app/logs # Sử dụng Named Volume để tránh lỗi permission trên Windows
     restart: unless-stopped

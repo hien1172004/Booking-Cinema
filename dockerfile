@@ -8,9 +8,10 @@ WORKDIR /app
 
 COPY target/*.jar app.jar
 
-RUN useradd -m appuser && \
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -m -s /bin/bash appuser && \
     mkdir -p /app/logs && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app /app/logs
 
 USER appuser
 

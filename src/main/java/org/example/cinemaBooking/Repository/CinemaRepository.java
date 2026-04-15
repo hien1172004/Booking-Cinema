@@ -44,4 +44,9 @@ public interface CinemaRepository extends JpaRepository<Cinema, String> {
             @Param("to") LocalDateTime to,
             Pageable pageable
     );
+
+    /**
+     * Tìm rạp theo tên (LIKE, không phân biệt hoa thường) — dùng cho chatbot.
+     */
+    List<Cinema> findByNameContainingIgnoreCaseAndDeletedFalse(String keyword);
 }

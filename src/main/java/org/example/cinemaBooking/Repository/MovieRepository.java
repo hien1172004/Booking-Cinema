@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -77,4 +78,32 @@ AND m.deleted = false
             LocalDate today
     );
 
+    /**
+     * Tìm phim đang chiếu / sắp chiếu theo tên thể loại (dùng cho chatbot).
+     */
+    @EntityGraph(attributePaths = {"categories"})
+    @Query("""
+    SELECT DISTINCT m FROM Movie m
+    JOIN m.categories c
+    WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :genreName, '%'))
+      AND m.status IN ('NOW_SHOWING', 'COMING_SOON')
+      AND m.deleted = false
+    ORDER BY m.releaseDate DESC
+    """)
+    List<Movie> findByGenreName(@Param("genreName") String genreName);
+
+    /**
+     * Tìm phim có diễn viên hoặc đạo diễn tham gia theo tên (dùng cho chatbot).
+     */
+    @EntityGraph(attributePaths = {"categories"})
+    @Query("""
+    SELECT DISTINCT m FROM Movie m
+    JOIN MoviePeople mp ON mp.movie = m
+    JOIN mp.people p
+    WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :actorName, '%'))
+      AND m.status IN ('NOW_SHOWING', 'COMING_SOON')
+      AND m.deleted = false
+    ORDER BY m.releaseDate DESC
+    """)
+    List<Movie> findByActorName(@Param("actorName") String actorName);
 }

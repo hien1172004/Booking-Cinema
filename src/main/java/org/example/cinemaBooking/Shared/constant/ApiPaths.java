@@ -100,4 +100,9 @@ public final class ApiPaths {
          public static final String DELETE = "/delete";
     }
 
+    public static final class Chatbot {
+        public static final String BASE = "/chatbot";
+        public static final String CHAT = "/chat";
+    }
+
 }

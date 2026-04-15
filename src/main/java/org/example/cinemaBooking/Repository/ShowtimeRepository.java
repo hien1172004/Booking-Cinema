@@ -72,6 +72,27 @@ public interface ShowtimeRepository
             @Param("excluded") ShowTimeStatus excluded
     );
 
+    // ── Lịch chiếu theo tên rạp (LIKE) + ngày — dùng cho chatbot ────
+
+    @Query("""
+            SELECT s FROM Showtime s
+              JOIN FETCH s.movie m
+              JOIN FETCH s.room  r
+              JOIN FETCH r.cinema c
+            WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', :cinemaName, '%'))
+              AND s.startTime >= :from
+              AND s.startTime <  :to
+              AND s.status    != :excluded
+              AND s.deletedAt IS NULL
+            ORDER BY s.startTime ASC
+            """)
+    List<Showtime> findByCinemaNameAndDateRange(
+            @Param("cinemaName") String cinemaName,
+            @Param("from")       LocalDateTime from,
+            @Param("to")         LocalDateTime to,
+            @Param("excluded")   ShowTimeStatus excluded
+    );
+
     // ── Kiểm tra conflict lịch chiếu cùng phòng ──────────────────────
     // Dùng khi tạo / chỉnh suất: đảm bảo không overlap với buffer 20 phút
 

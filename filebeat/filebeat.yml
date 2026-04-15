@@ -2,8 +2,8 @@
 setup.strict.perms: false
 
 filebeat.inputs:
-  # Đọc từ file log của Spring Boot app
-  - type: log
+  - type: filestream
+    id: cinema-booking-logs
     enabled: true
     paths:
       - /usr/share/cinema/logs/*.log
@@ -11,9 +11,12 @@ filebeat.inputs:
       service: cinema-booking
       environment: dev
     fields_under_root: true
-    multiline.pattern: '^\d{4}-\d{2}-\d{2}'
-    multiline.negate: true
-    multiline.match: after
+    parsers:
+      - multiline:
+          type: pattern
+          pattern: '^\d{4}-\d{2}-\d{2}'
+          negate: true
+          match: after
 
   # Đọc log từ Docker containers (Vô hiệu hóa để tránh lỗi trên Windows)
   - type: container

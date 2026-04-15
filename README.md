@@ -85,33 +85,14 @@ Hệ thống đặt vé xem phim trực tuyến được xây dựng bằng **Sp
 
 ## 🏗 Kiến Trúc Hệ Thống
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Client (Mobile / Web)                     │
-└─────────────────────────┬───────────────────────────────────┘
-                           │ HTTP REST API
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 Spring Boot App (:8081)                       │
-│  ┌───────────┐  ┌──────────┐  ┌───────────┐  ┌───────────┐ │
-│  │Controller │→ │ Service  │→ │Repository │  │ AI Chatbot│ │
-│  └───────────┘  └──────────┘  └───────────┘  └─────┬─────┘ │
-└─────┬────────────────────┬──────────────────────────┼───────┘
-      │                    │                          │
-      ▼                    ▼                          ▼
-┌──────────┐       ┌──────────────┐       ┌──────────────────┐
-│  MySQL   │       │    Redis     │       │  Google Gemini   │
-│  :3307   │       │   :6379      │       │  (Gemini 2.0     │
-│ (Data)   │       │(Cache/Memory)│       │   Flash API)     │
-└──────────┘       └──────────────┘       └──────────────────┘
+<p align="center">
+  <img src="docs/architecture.png" width="800"/>
+</p>
 
-ELK Logging Pipeline:
-Spring App → Logstash(:5000) → Elasticsearch(:9200) → Kibana(:5601)
-           ↘ File(/app/logs) → Filebeat(:5044) → Logstash
+<p align="center">
+  <i>Hệ thống Cinema Booking sử dụng Spring Boot, Redis, MySQL, AI Chatbot và ELK Stack</i>
+</p>
 
-Cloud Storage:
-Spring App → Cloudinary (Image Upload)
-```
 
 ---
 
@@ -447,16 +428,13 @@ Mở trình duyệt: **[http://localhost:5601](http://localhost:5601)**
 
 ### Luồng Log
 
-```
-Spring App
-  ├── Console (stdout Docker)
-  ├── File: /app/logs/cinema.log  ←── Filebeat đọc ──→ Logstash(:5044)
-  └── TCP:5000 ──────────────────────────────────────→ Logstash(:5000)
-                                                            │
-                                                     Elasticsearch(:9200)
-                                                            │
-                                                         Kibana(:5601) 📊
-```
+<p align="center">
+  <img src="docs/log.png" width="800"/>
+</p>
+
+<p align="center">
+  <i>Luồng xử lý log từ Spring Boot → ELK Stack</i>
+</p>
 
 > Log file được rotate hàng ngày, giữ tối đa **7 ngày** và **500MB**.
 

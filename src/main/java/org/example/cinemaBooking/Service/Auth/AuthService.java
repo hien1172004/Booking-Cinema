@@ -184,7 +184,7 @@ public class AuthService {
         return signedJWT;
     }
 
-    String generateToken(UserEntity user) {
+    public String generateToken(UserEntity user) {
         Instant now = Instant.now();
 
         JWTClaimsSet claims = new JWTClaimsSet.Builder()

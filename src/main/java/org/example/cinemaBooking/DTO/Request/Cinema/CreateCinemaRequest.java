@@ -1,7 +1,9 @@
 package org.example.cinemaBooking.DTO.Request.Cinema;
 
 import jakarta.validation.constraints.NotBlank;
+import lombok.Builder;
 
+@Builder
 public record CreateCinemaRequest(
         @NotBlank(message = "NAME_REQUIRED") String name,
         @NotBlank(message = "ADDRESS_REQUIRED") String address,

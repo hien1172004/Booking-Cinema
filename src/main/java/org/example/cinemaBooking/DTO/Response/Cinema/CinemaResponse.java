@@ -1,6 +1,8 @@
 package org.example.cinemaBooking.DTO.Response.Cinema;
 
+import lombok.Builder;
 import org.example.cinemaBooking.Shared.enums.Status;
+@Builder
 
 public record CinemaResponse(
         String id,

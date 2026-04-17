@@ -28,7 +28,7 @@ public enum ErrorCode {
     TABLE_NOT_FOUND(1014, "Table not found", HttpStatus.NOT_FOUND),
     ORDER_NOT_FOUND(1015, "Order not found", HttpStatus.NOT_FOUND),
     PASSWORD_CONFIRM_NOT_MATCH(1016, "Password confirm not match", HttpStatus.BAD_REQUEST),
-    PASSWORD_SAME_AS_OLD(1017, "New password must be different from old password", HttpStatus.BAD_REQUEST),
+    INVALID_OLD_PASSWORD(1017, "OldPassword incorrect", HttpStatus.BAD_REQUEST),
     INVALID_RESET_TOKEN(1018, "Invalid or expired reset token", HttpStatus.BAD_REQUEST),
     EMAIL_REQUIRED(1019, "Email is required", HttpStatus.BAD_REQUEST),
     TOKEN_REQUIRED(1020, "Reset token is required", HttpStatus.BAD_REQUEST),
@@ -164,7 +164,8 @@ public enum ErrorCode {
     FILE_DELETE_FAILED(1151, "Failed to delete file", HttpStatus.INTERNAL_SERVER_ERROR),
     FILE_UPLOAD_FAILED(1152, "Failed to upload file", HttpStatus.INTERNAL_SERVER_ERROR),
     USER_BANNED(1153, "User is banned", HttpStatus.FORBIDDEN),
-    TOO_MANY_REQUESTS(1154, "Too many requests", HttpStatus.TOO_MANY_REQUESTS);
+    TOO_MANY_REQUESTS(1154, "Too many requests", HttpStatus.TOO_MANY_REQUESTS),
+    SAME_OLD_PASSWORD(1155, "New password must be different from old password", HttpStatus.BAD_REQUEST);
     ;
 
 

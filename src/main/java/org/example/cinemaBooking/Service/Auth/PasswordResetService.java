@@ -63,7 +63,7 @@ public class PasswordResetService {
 
         // Kiểm tra mật khẩu mới không được trùng mật khẩu cũ
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
-            throw new AppException(ErrorCode.PASSWORD_SAME_AS_OLD);
+            throw new AppException(ErrorCode.SAME_OLD_PASSWORD);
         }
 
         // Cập nhật mật khẩu

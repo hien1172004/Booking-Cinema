@@ -90,9 +90,11 @@ public class UserService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new AppException(ErrorCode.PASSWORD_SAME_AS_OLD);
+            throw new AppException(ErrorCode.INVALID_OLD_PASSWORD);
         }
-
+        if (request.getOldPassword().equals(request.getNewPassword())) {
+            throw new AppException(ErrorCode.SAME_OLD_PASSWORD);
+        }
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new AppException(ErrorCode.PASSWORD_CONFIRM_NOT_MATCH);
         }

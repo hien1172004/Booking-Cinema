@@ -8,7 +8,8 @@ target/
 .env
 /logs/
 *.log
-
+extract_missed_lines.py
+extract_coverage.py
 
 ### STS ###
 .apt_generated

@@ -601,9 +601,9 @@ class UserServiceTest {
 
             // Then
             verify(userRepository).save(argThat(u ->
-                u.getUsername().equals("new_boss") &&
-                u.getPassword().equals("encoded_secret") &&
-                u.getRoles().contains(adminRole)
+                    u.getUsername().equals("new_boss") &&
+                            u.getPassword().equals("encoded_secret") &&
+                            u.getRoles().contains(adminRole)
             ));
         }
 

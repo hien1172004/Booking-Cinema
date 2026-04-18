@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-
 import org.example.cinemaBooking.Shared.persistence.SoftDeletableEntity;
 import org.example.cinemaBooking.Shared.enums.Language;
 import org.example.cinemaBooking.Shared.enums.ShowTimeStatus;
@@ -43,7 +42,6 @@ public class Showtime extends SoftDeletableEntity {
     @Column(nullable = false)
     ShowTimeStatus status = ShowTimeStatus.SCHEDULED;
 
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "movie_id", nullable = false)
     private Movie movie;
@@ -71,8 +69,7 @@ public class Showtime extends SoftDeletableEntity {
     }
 
     public boolean isFinished() {
-        return status == ShowTimeStatus.FINISHED
-                && LocalDateTime.now().isAfter(getEndTime());
+        return LocalDateTime.now().isAfter(getEndTime());
     }
 
     public boolean isBookable() {

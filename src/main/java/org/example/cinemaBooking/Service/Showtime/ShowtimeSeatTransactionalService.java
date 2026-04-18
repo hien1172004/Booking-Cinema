@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
-
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -43,7 +42,8 @@ public class ShowtimeSeatTransactionalService {
 
     /**
      * Logic lock thực sự — 1 transaction.
-     * Nếu @Version conflict → OptimisticLockingFailureException → caller (ShowTimeSeatService) retry.
+     * Nếu @Version conflict → OptimisticLockingFailureException → caller
+     * (ShowTimeSeatService) retry.
      */
     @Transactional
     public List<ShowtimeSeatResponse> doLockSeats(String showtimeId, LockSeatRequest request) {
@@ -54,8 +54,7 @@ public class ShowtimeSeatTransactionalService {
             throw new AppException(ErrorCode.SHOWTIME_STATE_INVALID);
         }
 
-        List<ShowtimeSeat> targets =
-                showtimeSeatRepository.findByShowtimeIdAndSeatIds(showtimeId, request.seatIds());
+        List<ShowtimeSeat> targets = showtimeSeatRepository.findByShowtimeIdAndSeatIds(showtimeId, request.seatIds());
 
         if (targets.size() != request.seatIds().size()) {
             throw new AppException(ErrorCode.SEAT_NOT_FOUND);
@@ -116,8 +115,7 @@ public class ShowtimeSeatTransactionalService {
     public List<ShowtimeSeatResponse> doUnlockSeats(String showtimeId, UnlockSeatRequest request) {
         String userId = getCurrentUserId();
 
-        List<ShowtimeSeat> targets =
-                showtimeSeatRepository.findByShowtimeIdAndSeatIds(showtimeId, request.seatIds());
+        List<ShowtimeSeat> targets = showtimeSeatRepository.findByShowtimeIdAndSeatIds(showtimeId, request.seatIds());
 
         if (targets.size() != request.seatIds().size()) {
             throw new AppException(ErrorCode.SEAT_NOT_FOUND);
@@ -146,13 +144,13 @@ public class ShowtimeSeatTransactionalService {
     // HELPERS
     // ────────────────────────────────────────────────────────────
 
-    void releaseSeat(ShowtimeSeat ss) {
+    public void releaseSeat(ShowtimeSeat ss) {
         ss.setStatus(SeatStatus.AVAILABLE);
         ss.setLockedUntil(null);
         ss.setLockedByUser(null);
     }
 
-    void syncAvailableSeats(String showtimeId) {
+    public void syncAvailableSeats(String showtimeId) {
         showtimeRepository.syncAvailableSeats(showtimeId);
     }
 

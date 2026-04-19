@@ -34,9 +34,14 @@ public class RateLimitConfig {
     @Bean(destroyMethod = "shutdown")
     public RedisClient redisClient(
             @Value("${spring.data.redis.host}") String host,
-            @Value("${spring.data.redis.port}") int port) {
+            @Value("${spring.data.redis.port}") int port,
+            @Value("${spring.data.redis.password:}") String password) {
 
-        return RedisClient.create("redis://" + host + ":" + port);
+        // Aiven requires SSL (rediss://)
+        String protocol = host.contains("aivencloud.com") ? "rediss" : "redis";
+        String auth = (password != null && !password.isEmpty()) ? ":" + password + "@" : "";
+        
+        return RedisClient.create(protocol + "://" + auth + host + ":" + port);
     }
 
     @Bean(destroyMethod = "close")

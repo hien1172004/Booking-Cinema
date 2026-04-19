@@ -42,8 +42,8 @@
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
-        <!-- Logstash appender chỉ active khi profile KHÔNG phải "local" -->
-        <springProfile name="!local">
+        <!-- Logstash appender chỉ active khi profile là "dev" -->
+        <springProfile name="dev">
             <appender-ref ref="LOGSTASH"/>
         </springProfile>
     </root>

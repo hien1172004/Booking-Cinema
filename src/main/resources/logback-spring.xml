@@ -24,28 +24,26 @@
         </encoder>
     </appender>
 
-    <!-- LOGSTASH APPENDER (chỉ chạy trong Docker, không chạy khi local) -->
-    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
-        <destination>${LOGSTASH_HOST}:${LOGSTASH_PORT}</destination>
-
-        <!-- JSON format gửi tới Logstash -->
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <customFields>{"service":"cinema-booking"}</customFields>
-        </encoder>
-
-        <!-- Tự reconnect nếu Logstash tạm thời down -->
-        <reconnectionDelay>5000</reconnectionDelay>
-
-    </appender>
+    <!-- LOGSTASH APPENDER (chỉ chạy trong môi trường dev) -->
+    <springProfile name="dev">
+        <appender-ref ref="LOGSTASH"/>
+        <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <destination>${LOGSTASH_HOST}:${LOGSTASH_PORT}</destination>
+    
+            <!-- JSON format gửi tới Logstash -->
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"service":"cinema-booking"}</customFields>
+            </encoder>
+    
+            <!-- Tự reconnect nếu Logstash tạm thời down -->
+            <reconnectionDelay>5000</reconnectionDelay>
+        </appender>
+    </springProfile>
 
     <!-- ROOT LOG LEVEL -->
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
-        <!-- Logstash appender chỉ active khi profile là "dev" -->
-        <springProfile name="dev">
-            <appender-ref ref="LOGSTASH"/>
-        </springProfile>
     </root>
 
 </configuration>

@@ -24,4 +24,4 @@ RUN groupadd -g 1000 appuser && \
 
 USER appuser
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Xmx384m -Xms384m -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx256m -Xms256m -jar app.jar"]

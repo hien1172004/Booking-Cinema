@@ -43,7 +43,7 @@ logging:
     org.springframework: INFO
     org.hibernate.SQL: debug
     org.hibernate.type.descriptor.sql.BasicBinder: trace
-    org.hibernate: ERROR
+    org.hibernate: WARN
 
 cloudinary:
   cloud-name: ${CLOUD_NAME}

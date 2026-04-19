@@ -74,3 +74,12 @@ logging:
 app:
   frontend-url: ${PROD_URL}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
+

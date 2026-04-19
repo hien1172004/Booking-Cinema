@@ -12,7 +12,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
@@ -24,6 +24,8 @@ spring:
       port: ${SPRING_REDIS_PORT}
       password: ${SPRING_REDIS_PASSWORD:}
       timeout: 5000
+      ssl:
+        enabled: true
 
   mail:
     host: smtp.gmail.com
@@ -63,4 +65,4 @@ logging:
   level:
     root: INFO
     org.springframework: INFO
-    org.hibernate: ERROR
+    org.hibernate: INFO

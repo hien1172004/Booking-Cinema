@@ -21,63 +21,76 @@ Hệ thống đặt vé xem phim trực tuyến thời gian thực, tích hợp 
 ## ✨ Tính Năng Nổi Bật
 
 ### 🤖 AI Agent (Trợ Lý Ảo Gemini)
-Sử dụng **Spring AI** kết hợp với **Gemini 2.0 Flash**, chatbot có khả năng gọi 15 công cụ (Function Calling) để:
-- Tra cứu lịch chiếu, giá vé, kiểm tra ghế trống theo suất chiếu.
-- Gợi ý phim thông minh và kiểm tra tình trạng đơn hàng qua mã Booking.
-- Lưu lịch sử hội thoại (Chat Memory) bền vững trong Database.
+Sử dụng **Spring AI** kết hợp với **Gemini 2.0 Flash**, chatbot có khả năng gọi 15 công cụ (Function Calling) để tra cứu lịch chiếu, giá vé, kiểm tra ghế trống và gợi ý phim thông minh.
 
 ### 💳 Thanh Toán & Đặt Vé
 - **Real-time Locking:** Giữ ghế trong 5-10 phút khi người dùng đang thực hiện giao dịch.
 - **VNPay Integration:** Xử lý thanh toán an toàn, tự động hoàn trả ghế nếu thanh toán thất bại.
 - **Mã QR & Email:** Tự động tạo mã QR và gửi vé qua email tích hợp mã hóa an toàn.
 
-### 🚦 Ops & Security
-- **Rate Limit:** Bảo vệ chống DDoS đa tầng (Global, Auth, Payment).
-- **Monitoring:** Tổng hợp log qua ELK Stack và giám sát sức khỏe qua Actuator.
-- **Cloud Native:** Tối ưu JVM cho môi trường Container (Memory-constrained environments).
+---
+
+## 🚀 Hướng Dẫn Cài Đặt (Local Development)
+
+### 1. Yêu cầu hệ thống
+- JDK 21+
+- Docker & Docker Compose
+- Maven 3.8+
+
+### 2. Thiết lập biến môi trường
+Sao chép tệp mẫu và điền thông tin thực tế của bạn:
+```bash
+cp .env.example .env
+```
+> [!TIP]
+> Bạn cần chuẩn bị các API Key từ: [Google AI Studio](https://aistudio.google.com/apikey) (AI), [VNPay Sandbox](https://sandbox.vnpayment.vn/) (Thanh toán), và [Cloudinary](https://cloudinary.com/) (Lưu trữ ảnh).
+
+### 3. Khởi chạy hệ thống
+```bash
+./mvnw clean package -DskipTests
+docker compose up -d
+```
 
 ---
 
-## 🏗 Kiến Trúc Hệ Thống
+## 📖 Hướng Dẫn Sử Dụng & Test API
 
-Hệ thống được thiết kế theo mô hình **Layered Architecture** với sự tách biệt rõ ràng giữa Controller, Service, và Repository.
+### 🔐 Tài khoản mặc định
+Hệ thống tự động khởi tạo:
+- **Username:** `admin` | **Password:** `admin`
 
-<p align="center">
-  <img src="docs/architecture.png" width="800" alt="Architecture Diagram"/>
-</p>
+### 🛠 Cách sử dụng Swagger UI (Authorize)
+1. Truy cập: `https://booking-cinema-production.up.railway.app/swagger-ui/index.html`
+2. Tìm **Authentication** -> `POST /api/v1/auth/login`
+3. Thực hiện đăng nhập với tài khoản admin để lấy chuỗi **token**.
+4. Nhấn nút **Authorize** ở phía trên cùng trang web.
+5. Nhập: `Bearer <token_của_bạn>` rồi nhấn Authorize.
+6. Bây giờ bạn có thể gọi mọi API bảo mật.
 
 ---
 
-## 🚦 Chiến Lược Rate Limit (Tiered Strategy)
+## 🏗 Kiến Trúc Hệ Thống & Rate Limit
+
+Hệ thống sử dụng mô hình **Layered Architecture** giúp dễ dàng mở rộng và bảo trì.
 
 | Tầng | API Targets | Hạn mức |
 |---|---|---|
-| **Strict** | Auth (Login/Register), Booking, Payment | 3–5 req/phút |
-| **Moderate** | Statistics, Chatbot, Promotion Apply | 10–20 req/phút |
-| **Global** | Toàn bộ hệ thống (Security Filter) | 100 req/phút |
+| **Strict** | Auth, Booking, Payment | 3–5 req/phút |
+| **Moderate** | Statistics, Chatbot | 10–20 req/phút |
+| **Global** | Toàn bộ hệ thống | 100 req/phút |
 
 ---
 
 ## 🧪 Kiểm Thử & Chất Lượng Code
 
-Dự án chú trọng đặc biệt vào chất lượng mã nguồn với:
-- **Unit Testing:** >95% coverage cho các Service quan trọng (`CinemaService`, `UserService`, `ReviewService`).
-- **Standard:** Tuân thủ naming convention `given_when_then` và sử dụng `AssertJ` cho các câu khẳng định rõ ràng.
-
----
-
-## ☁️ Cloud Deployment
-
-Dự án được triển khai trên hạ tầng hiện đại:
-- **Application Server:** [Railway.app](https://railway.app/) (Tự động CI/CD qua GitHub).
-- **Database Service:** [Aiven](https://aiven.io/) (Cung cấp MySQL và Valkey/Redis với SSL).
+- **Unit Testing:** >95% coverage cho các Service quan trọng (`ReviewService`, `CinemaService`, v.v.).
+- **Monitoring:** Log được tập trung qua ELK Stack và giám sát qua Kibana.
 
 ---
 
 ## 📝 License & Contact
 
-- **License:** Dự án này được phát hành dưới giấy phép [MIT](https://opensource.org/licenses/MIT).
-- **Author:** [Hiền - hien1172004](https://github.com/hien1172004)
+- **Author:** [Hiến - hien1172004](https://github.com/hien1172004)
 - **Support:** Nếu có bất kỳ câu hỏi nào, vui lòng liên hệ qua GitHub Issue của dự án.
 
 ---

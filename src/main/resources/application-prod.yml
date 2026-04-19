@@ -49,6 +49,10 @@ cloudinary:
   api-key: ${CLOUD_API_KEY}
   api-secret: ${CLOUD_API_SECRET}
 
+server:
+  port: ${PORT:8081}
+  address: 0.0.0.0
+
 vnpay:
   tmn-code: ${TMN_CODE}
   hash-secret: ${TMN_KEY}

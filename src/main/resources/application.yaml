@@ -12,7 +12,7 @@ spring:
       validation-timeout: 5000
       maximum-pool-size: 10
   profiles:
-    active: dev
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   config:
     import: optional:file:.env[.properties]
   # ── Spring AI - Google Gemini (Native GenAI SDK) ──────────────────────────────
@@ -34,7 +34,7 @@ spring:
 
 
 server:
-  port: ${APP_PORT}
+  port: ${PORT:8081}
 
 logging:
   config: classpath:logback-spring.xml

@@ -66,3 +66,7 @@ logging:
     root: INFO
     org.springframework: INFO
     org.hibernate: INFO
+
+app:
+  frontend-url: ${PROD_URL}
+

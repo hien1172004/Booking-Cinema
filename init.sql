@@ -987,3 +987,15 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-04-08 23:51:32
+
+--
+-- Table structure for table \SPRING_AI_CHAT_MEMORY\ --
+--
+CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
+    id VARCHAR(36) NOT NULL PRIMARY KEY DEFAULT (UUID()),
+    conversation_id VARCHAR(255) NOT NULL,
+    content TEXT,
+    type VARCHAR(255),
+    \	imestamp\ TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_conversation_id (conversation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

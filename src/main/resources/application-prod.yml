@@ -10,6 +10,12 @@ spring:
       idle-timeout: 30000
       connection-timeout: 20000
 
+  ai:
+    chat:
+      memory:
+        jdbc:
+          initialize-schema: always
+
   jpa:
     hibernate:
       ddl-auto: none

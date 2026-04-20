@@ -27,9 +27,8 @@ spring:
 #            max-tokens: 2048
     chat:
       memory:
-        repository:
-          jdbc:
-            initialize-schema: always
+        jdbc:
+          initialize-schema: always
 
 
 

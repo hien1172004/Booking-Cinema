@@ -47,7 +47,7 @@ public class StatisticsServiceTest {
             LocalDate to = LocalDate.now();
             when(paymentRepository.getRevenue(eq(PaymentStatus.SUCCESS), any(), any(), any()))
                     .thenReturn(BigDecimal.valueOf(1000000));
-            when(ticketRepository.countTickets(eq(TicketStatus.VALID), any(), any(), any(), any()))
+            when(ticketRepository.countTickets(any(), any(), any(), any(), any()))
                     .thenReturn(50);
 
             // When

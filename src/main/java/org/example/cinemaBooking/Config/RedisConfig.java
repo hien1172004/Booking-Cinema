@@ -42,13 +42,15 @@ public class RedisConfig {
                 .allowIfSubType("org.example.cinemaBooking")
                 .allowIfSubType("java.util")
                 .allowIfSubType("java.time")
+                .allowIfSubType("java.math")
+                .allowIfSubType("java.lang")
                 .build();
 
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         mapper.activateDefaultTyping(ptv,
-                ObjectMapper.DefaultTyping.NON_FINAL,
+                ObjectMapper.DefaultTyping.EVERYTHING,
                 JsonTypeInfo.As.PROPERTY);
         return mapper;
     }

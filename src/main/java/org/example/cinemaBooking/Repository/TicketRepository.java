@@ -136,14 +136,14 @@ public interface TicketRepository extends JpaRepository<Ticket, String> {
         JOIN s.movie m
         JOIN s.room r
         JOIN r.cinema c
-        WHERE t.status = :status
+        WHERE t.status IN :statuses
           AND t.createdAt >= :start
           AND t.createdAt < :end
           AND (:cinemaId IS NULL OR c.id = :cinemaId)
           AND (:movieId IS NULL OR m.id = :movieId)
     """)
     int countTickets(
-            @Param("status") TicketStatus status,
+            @Param("statuses") List<TicketStatus> statuses,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             @Param("cinemaId") String cinemaId,
@@ -158,14 +158,14 @@ public interface TicketRepository extends JpaRepository<Ticket, String> {
         JOIN s.movie m
         JOIN s.room r
         JOIN r.cinema c
-        WHERE t.status = :status
+        WHERE t.status IN :statuses
           AND t.createdAt >= :start
           AND t.createdAt < :end
           AND (:cinemaId IS NULL OR c.id = :cinemaId)
           AND (:movieId IS NULL OR m.id = :movieId)
     """)
     int countBookings(
-            @Param("status") TicketStatus status,
+            @Param("statuses") List<TicketStatus> statuses,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             @Param("cinemaId") String cinemaId,
@@ -180,14 +180,14 @@ public interface TicketRepository extends JpaRepository<Ticket, String> {
         JOIN s.movie m
         JOIN s.room r
         JOIN r.cinema c
-        WHERE t.status = :status
+        WHERE t.status IN :statuses
           AND t.createdAt >= :start
           AND t.createdAt < :end
           AND (:cinemaId IS NULL OR c.id = :cinemaId)
           AND (:movieId IS NULL OR m.id = :movieId)
     """)
     int countMovies(
-            @Param("status") TicketStatus status,
+            @Param("statuses") List<TicketStatus> statuses,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             @Param("cinemaId") String cinemaId,
@@ -206,7 +206,7 @@ public interface TicketRepository extends JpaRepository<Ticket, String> {
         JOIN s.movie m
         JOIN s.room r
         JOIN r.cinema c
-        WHERE t.status = :status
+        WHERE t.status IN :statuses
           AND t.createdAt >= :start
           AND t.createdAt < :end
           AND (:cinemaId IS NULL OR c.id = :cinemaId)
@@ -215,7 +215,7 @@ public interface TicketRepository extends JpaRepository<Ticket, String> {
         ORDER BY FUNCTION('DATE', t.createdAt)
     """)
     List<TicketSeriesItem> getTicketSeries(
-            @Param("status") TicketStatus status,
+            @Param("statuses") List<TicketStatus> statuses,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
             @Param("cinemaId") String cinemaId,

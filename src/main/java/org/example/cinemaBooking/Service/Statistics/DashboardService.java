@@ -39,7 +39,7 @@ public class DashboardService {
         LocalDateTime end = today.plusDays(1).atStartOfDay();
 
         BigDecimal revenue = paymentRepository.getRevenue(PaymentStatus.SUCCESS, start, end, null);
-        int tickets = ticketRepository.countTickets(TicketStatus.VALID, start, end, null, null);
+        int tickets = ticketRepository.countTickets(List.of(TicketStatus.VALID, TicketStatus.USED, TicketStatus.EXPIRED), start, end, null, null);
         int users = userRepository.countUsers(start, end);
         int showtimes = showtimeRepository.countShowtimes(start, end);
 

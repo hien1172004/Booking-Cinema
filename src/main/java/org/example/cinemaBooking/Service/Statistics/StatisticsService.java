@@ -44,19 +44,19 @@ public class StatisticsService {
                 end,
                 cinemaId);
         int tickets = ticketRepository.countTickets(
-                TicketStatus.VALID,
+                List.of(TicketStatus.VALID, TicketStatus.USED, TicketStatus.EXPIRED),
                 start,
                 end,
                 cinemaId,
                 movieId);
         int bookings = ticketRepository.countBookings(
-                TicketStatus.VALID,
+                List.of(TicketStatus.VALID, TicketStatus.USED, TicketStatus.EXPIRED),
                 start,
                 end,
                 cinemaId,
                 movieId);
         int movies = ticketRepository.countMovies(
-                TicketStatus.VALID,
+                List.of(TicketStatus.VALID, TicketStatus.USED, TicketStatus.EXPIRED),
                 start,
                 end,
                 cinemaId,
@@ -87,7 +87,7 @@ public class StatisticsService {
     @Cacheable(value = "stats-ticket-chart", key = "#from + '-' + #to + '-' + (#cinemaId ?: 'all') + '-' + (#movieId ?: 'all')")
     public List<TicketSeriesItem> getTicketChart(LocalDate from, LocalDate to, String cinemaId, String movieId) {
         List<TicketSeriesItem> raw = ticketRepository.getTicketSeries(
-                TicketStatus.VALID,
+                List.of(TicketStatus.VALID, TicketStatus.USED, TicketStatus.EXPIRED),
                 from.atStartOfDay(),
                 to.plusDays(1).atStartOfDay(),
                 cinemaId, movieId);

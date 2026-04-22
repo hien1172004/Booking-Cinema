@@ -263,7 +263,7 @@ public class UserService {
     /**
      * Helper: lấy username từ SecurityContext.
      */
-    private String getCurrentUsername() {
+    public String getCurrentUsername() {
         return SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();

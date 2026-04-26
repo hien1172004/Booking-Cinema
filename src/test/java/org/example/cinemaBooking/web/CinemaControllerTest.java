@@ -41,8 +41,10 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import org.springframework.test.context.ActiveProfiles;
 
 
+@ActiveProfiles("test")
 @WebMvcTest(
         controllers = CinemaController.class,
         excludeFilters = @ComponentScan.Filter(

@@ -20,6 +20,12 @@ spring:
     port: 6379
   mail:
     host: localhost
+  ai:
+    chat:
+      memory:
+        jdbc:
+          initialize-schema: never
+
 jwt:
   signerKey: test-key-64-chars-long-for-jwt-signing-in-tests-only
 app:
@@ -33,9 +39,3 @@ logging:
 springdoc:
   swagger-ui:
     enabled: false
-spring:
-  ai:
-    chat:
-      memory:
-        jdbc:
-          initialize-schema: never
